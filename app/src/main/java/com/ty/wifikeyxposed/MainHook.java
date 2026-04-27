@@ -180,6 +180,7 @@ public class MainHook extends XposedModule {
             for (String name : regions) {
                 View view = getFieldSafe(binding, name);
                 if (view != null) {
+                    log(4, TAG, "Force hiding VIP banner element: " + name);
                     view.post(() -> view.setVisibility(View.GONE));
                 }
             }
