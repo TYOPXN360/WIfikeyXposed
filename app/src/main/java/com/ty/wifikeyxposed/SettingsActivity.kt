@@ -216,31 +216,15 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                 onClick = {
                     val packageName = "com.snda.wifilocating"
                     val restartAction = "com.ty.wifikeyxposed.ACTION_RESTART"
-                    val appContext = context.applicationContext
                     
-                    // 1. 发送免 Root 自杀广播
-                    val suicideIntent = android.content.Intent(restartAction).apply {
+                    // 1. 发送免 Root 重启广播
+                    // 注意：现在逻辑改为目标应用收到广播后，自己预约 REVIVAL 并自杀
+                    val intent = android.content.Intent(restartAction).apply {
                         setPackage(packageName)
                     }
-                    context.sendBroadcast(suicideIntent)
+                    context.sendBroadcast(intent)
                     
-                    Toast.makeText(context, "正在尝试免 Root 重启...", Toast.LENGTH_SHORT).show()
-                    
-                    // 2. 由模块进程直接发起延时拉起，不依赖 AlarmManager
-                    // 使用 1200ms 延迟，确保旧进程已彻底消失
-                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                        try {
-                            val launchIntent = appContext.packageManager.getLaunchIntentForPackage(packageName)
-                            if (launchIntent != null) {
-                                // 移除 CLEAR_TASK，仅使用 NEW_TASK，提高某些 ROM 下的兼容性
-                                launchIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                                appContext.startActivity(launchIntent)
-                                android.util.Log.d("WiFiKeyXposed", "Successfully triggered relaunch")
-                            }
-                        } catch (e: Exception) {
-                            android.util.Log.e("WiFiKeyXposed", "Manual relaunch failed: " + e.message)
-                        }
-                    }, 1200)
+                    Toast.makeText(context, "正在发起自愈式重启...", Toast.LENGTH_SHORT).show()
                 },
                 modifier = Modifier.fillMaxWidth(),
                 shape = MaterialTheme.shapes.extraLarge,
@@ -248,11 +232,11 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
             ) {
                 Icon(Icons.Default.Bolt, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("免 Root 极速重启应用", fontWeight = FontWeight.Bold)
+                Text("自愈式免 Root 极速重启", fontWeight = FontWeight.Bold)
             }
             
             Text(
-                "提示：利用 Xposed 注入逻辑实现应用的秒杀与重载",
+                "提示：利用目标应用自身的临终预约机制实现 100% 自动拉起",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.secondary,
                 modifier = Modifier.padding(top = 8.dp, start = 16.dp)
