@@ -12,7 +12,7 @@ package com.ty.wifikeyxposed;
  * 8. 解锁策略：必须是“解锁会员”而非“删除会员体系”。保留 SVIP 标识，仅隐藏推广横幅。
  * 9. API 规范：100% 符合 libxposed API 101 规范，完全移除旧 API 支持。
  * 10. 修复记录：通过 ContentProvider 彻底解决跨进程偏好同步失效问题。
- * 11. 增强日志：在每次 Hook 决策时输出实时读取到的开关状态。
+ * 11. 关键修复：修复 getConfig 默认值逻辑，并增加对 ContentProvider 格式的严格校验。
  */
 
 import android.content.ComponentName;
@@ -54,6 +54,7 @@ public class MainHook extends XposedModule {
     private boolean getConfig(String key, boolean def) {
         try {
             SharedPreferences sp = getRemotePreferences("settings");
+            // 只有当 SP 明确包含该 Key 时才返回其值，否则返回传入的默认值
             if (sp.contains(key)) {
                 return sp.getBoolean(key, def);
             }
@@ -61,12 +62,9 @@ public class MainHook extends XposedModule {
         return def;
     }
 
-    // 优化的实时查询方法，带详细日志
     private boolean isFeatureEnabled(Context context, String key, boolean def) {
         if (context == null) {
-            boolean val = getConfig(key, def);
-            log(4, TAG, "Realtime check (RemotePrefs) -> " + key + ": " + val);
-            return val;
+            return getConfig(key, def);
         }
         Cursor cursor = null;
         try {
@@ -74,7 +72,6 @@ public class MainHook extends XposedModule {
             cursor = context.getContentResolver().query(uri, null, null, null, null);
             if (cursor != null && cursor.moveToFirst()) {
                 boolean val = cursor.getInt(0) == 1;
-                log(4, TAG, "Realtime check (Provider) -> " + key + ": " + val);
                 return val;
             }
         } catch (Exception e) {
@@ -82,9 +79,7 @@ public class MainHook extends XposedModule {
         } finally {
             if (cursor != null) cursor.close();
         }
-        boolean val = getConfig(key, def);
-        log(4, TAG, "Realtime check (Fallback) -> " + key + ": " + val);
-        return val;
+        return getConfig(key, def);
     }
 
     @Override
@@ -98,8 +93,9 @@ public class MainHook extends XposedModule {
             mainHandler = new Handler(Looper.getMainLooper());
         }
 
-        // 注入阶段状态
-        log(4, TAG, "Initial Hook state - VIP: " + isFeatureEnabled(null, "unlock_vip", true));
+        // 默认全部设为 false，确保在同步未成功前不激活 Hook
+        final boolean vipEnabled = getConfig("unlock_vip", false);
+        log(4, TAG, "Hooking into: " + param.getPackageName() + " (VIP: " + vipEnabled + ")");
 
         ClassLoader classLoader = param.getClassLoader();
         
@@ -121,7 +117,7 @@ public class MainHook extends XposedModule {
             for (Method m : abstractAdsClass.getDeclaredMethods()) {
                 if (m.getName().equals("isBlocked") && m.getParameterCount() == 0) {
                     hook(m).intercept(chain -> {
-                        if (isFeatureEnabled(null, "remove_ads", true)) return true;
+                        if (isFeatureEnabled(null, "remove_ads", false)) return true;
                         return chain.proceed();
                     });
                 }
@@ -133,7 +129,7 @@ public class MainHook extends XposedModule {
             for (Method m : adStrategyClass.getDeclaredMethods()) {
                 if (m.getName().equals("getBlock") && m.getParameterCount() == 0) {
                     hook(m).intercept(chain -> {
-                        if (isFeatureEnabled(null, "remove_ads", true)) return true;
+                        if (isFeatureEnabled(null, "remove_ads", false)) return true;
                         return chain.proceed();
                     });
                 }
@@ -145,7 +141,6 @@ public class MainHook extends XposedModule {
         try {
             Class<?> meFragmentClass = classLoader.loadClass(ME_FRAGMENT_CLASS);
             
-            // 注入入口
             try {
                 Method a2Method = meFragmentClass.getDeclaredMethod("a2");
                 a2Method.setAccessible(true);
@@ -159,25 +154,23 @@ public class MainHook extends XposedModule {
                 });
             } catch (Exception ignored) {}
 
-            // 会员校验
             try {
                 Method d2Method = meFragmentClass.getDeclaredMethod("d2");
                 d2Method.setAccessible(true);
                 hook(d2Method).intercept(new XposedInterface.Hooker() {
                     @Override
                     public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable {
-                        if (isFeatureEnabled(null, "unlock_vip", true)) return true;
+                        if (isFeatureEnabled(null, "unlock_vip", false)) return true;
                         return chain.proceed();
                     }
                 });
             } catch (Exception ignored) {}
 
-            // 隐藏横幅
             final XposedInterface.Hooker hideBannerHooker = new XposedInterface.Hooker() {
                 @Override
                 public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable {
                     Object result = chain.proceed();
-                    boolean vip = isFeatureEnabled(null, "unlock_vip", true);
+                    boolean vip = isFeatureEnabled(null, "unlock_vip", false);
                     if (vip) {
                         boolean clean = isFeatureEnabled(null, "deep_clean_vip", false);
                         hideVipBanners(chain.getThisObject(), clean);
@@ -288,7 +281,7 @@ public class MainHook extends XposedModule {
         final XposedInterface.Hooker vipMethodHooker = new XposedInterface.Hooker() {
             @Override
             public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable {
-                if (!isFeatureEnabled(null, "unlock_vip", true)) return chain.proceed();
+                if (!isFeatureEnabled(null, "unlock_vip", false)) return chain.proceed();
 
                 Method m = (Method) chain.getExecutable();
                 Class<?> returnType = m.getReturnType();
@@ -330,7 +323,7 @@ public class MainHook extends XposedModule {
             @Override
             public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable {
                 Object result = chain.proceed();
-                if (!isFeatureEnabled(null, "unlock_vip", true)) return result;
+                if (!isFeatureEnabled(null, "unlock_vip", false)) return result;
 
                 Object obj = chain.getThisObject();
                 if (obj == null) return result;
@@ -390,7 +383,7 @@ public class MainHook extends XposedModule {
                     hook(m).intercept(new XposedInterface.Hooker() {
                         @Override
                         public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable {
-                            if (!isFeatureEnabled(null, "unlock_vip", true)) return chain.proceed();
+                            if (!isFeatureEnabled(null, "unlock_vip", false)) return chain.proceed();
                             String name = chain.getExecutable().getName();
                             if (name.equals("c") || name.equals("d")) return true; 
                             return chain.proceed();
@@ -405,7 +398,7 @@ public class MainHook extends XposedModule {
         XposedInterface.Hooker storageHooker = new XposedInterface.Hooker() {
             @Override
             public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable {
-                if (!isFeatureEnabled(null, "unlock_vip", true)) return chain.proceed();
+                if (!isFeatureEnabled(null, "unlock_vip", false)) return chain.proceed();
                 String key = (String) chain.getArgs().get(0);
                 if (key == null) return chain.proceed();
                 String lowerKey = key.toLowerCase();
@@ -446,7 +439,7 @@ public class MainHook extends XposedModule {
                     hook(m).intercept(new XposedInterface.Hooker() {
                         @Override
                         public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable {
-                            if (!isFeatureEnabled(null, "unlock_vip", true)) return chain.proceed();
+                            if (!isFeatureEnabled(null, "unlock_vip", false)) return chain.proceed();
                             String name = chain.getExecutable().getName();
                             if (name.equals("j") || name.equals("i")) return true;
                             return chain.proceed();
