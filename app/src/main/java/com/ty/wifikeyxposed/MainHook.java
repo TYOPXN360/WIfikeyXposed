@@ -109,6 +109,9 @@ public class MainHook extends XposedModule {
         }
     }
 
+    /**
+     * 实现底栏精简功能及状态实时监控
+     */
     private void hookBottomNavigation(ClassLoader classLoader) {
         try {
             Class<?> viewCls = classLoader.loadClass("android.view.View");
@@ -129,10 +132,13 @@ public class MainHook extends XposedModule {
                 String prefKey = mapResNameToPrefKey(resName);
                 if (prefKey == null) return chain.proceed();
 
+                // 逻辑 A: 如果模块设置了隐藏，且应用尝试显示 -> 拦截
                 if (requestedVisibility == View.VISIBLE && isFeatureEnabled(prefKey, false)) {
+                    log(4, TAG, "Blocking Visibility on tab: " + resName);
                     return null; 
                 }
 
+                // 逻辑 B: 实时监控。如果应用自己设为 GONE -> 自动同步模块开关为 ON (Hidden)
                 if (requestedVisibility == View.GONE) {
                     updateFeatureState(prefKey, true);
                 }
@@ -140,12 +146,13 @@ public class MainHook extends XposedModule {
                 return chain.proceed();
             });
 
+            // 生命周期刷新
             try {
                 Class<?> mainActivityCls = classLoader.loadClass("com.wifitutu.ui.main.MainActivity");
                 Method onResumeMethod = mainActivityCls.getDeclaredMethod("onResume");
                 hook(onResumeMethod).intercept(chain -> {
                     Object result = chain.proceed();
-                    mainHandler.postDelayed(() -> refreshBottomTabs(chain.getThisObject()), 500);
+                    mainHandler.postDelayed(() -> refreshBottomTabs(chain.getThisObject()), 1000);
                     return result;
                 });
             } catch (Exception ignored) {}
@@ -187,6 +194,7 @@ public class MainHook extends XposedModule {
                     if (v != null) {
                         String prefKey = mapResNameToPrefKey(name);
                         if (isFeatureEnabled(prefKey, false)) {
+                            log(4, TAG, "Forcing GONE on tab: " + name);
                             v.setVisibility(View.GONE);
                         } else if (v.getVisibility() == View.GONE) {
                             updateFeatureState(prefKey, true);

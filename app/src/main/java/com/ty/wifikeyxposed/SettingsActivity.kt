@@ -95,23 +95,33 @@ fun AppTheme(content: @Composable () -> Unit) {
 fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
     val context = LocalContext.current
     
-    // 状态管理
-    var blockNews by remember { mutableStateOf(prefs.getBoolean("block_news", false)) }
-    var unlockVip by remember { mutableStateOf(prefs.getBoolean("unlock_vip", false)) }
-    var deepCleanVip by remember { mutableStateOf(prefs.getBoolean("deep_clean_vip", false)) }
-    var removeAds by remember { mutableStateOf(prefs.getBoolean("remove_ads", false)) }
-    var liteTeenager by remember { mutableStateOf(prefs.getBoolean("lite_teenager", false)) }
-    var removeCloudControl by remember { mutableStateOf(prefs.getBoolean("remove_cloud_control", false)) }
+    // 监听后台偏好设置变化
+    var tick by remember { mutableIntStateOf(0) }
+    DisposableEffect(prefs) {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+            tick++ // 触发重组
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+
+    // 使用 key 来确保重组时重新读取真实值
+    var blockNews by remember(tick) { mutableStateOf(prefs.getBoolean("block_news", false)) }
+    var unlockVip by remember(tick) { mutableStateOf(prefs.getBoolean("unlock_vip", false)) }
+    var deepCleanVip by remember(tick) { mutableStateOf(prefs.getBoolean("deep_clean_vip", false)) }
+    var removeAds by remember(tick) { mutableStateOf(prefs.getBoolean("remove_ads", false)) }
+    var liteTeenager by remember(tick) { mutableStateOf(prefs.getBoolean("lite_teenager", false)) }
+    var removeCloudControl by remember(tick) { mutableStateOf(prefs.getBoolean("remove_cloud_control", false)) }
 
     // 底栏精简状态
-    var hideHome by remember { mutableStateOf(prefs.getBoolean("hide_tab_home", false)) }
-    var hideNearby by remember { mutableStateOf(prefs.getBoolean("hide_tab_nearby", false)) }
-    var hideVideo by remember { mutableStateOf(prefs.getBoolean("hide_tab_video", false)) }
-    var hideWelfare by remember { mutableStateOf(prefs.getBoolean("hide_tab_welfare", false)) }
-    var hideIm by remember { mutableStateOf(prefs.getBoolean("hide_tab_im", false)) }
-    var hideWeb by remember { mutableStateOf(prefs.getBoolean("hide_tab_web", false)) }
-    var hideGuard by remember { mutableStateOf(prefs.getBoolean("hide_tab_guard", false)) }
-    var hideMe by remember { mutableStateOf(prefs.getBoolean("hide_tab_me", false)) }
+    var hideHome by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_home", false)) }
+    var hideNearby by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_nearby", false)) }
+    var hideVideo by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_video", false)) }
+    var hideWelfare by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_welfare", false)) }
+    var hideIm by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_im", false)) }
+    var hideWeb by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_web", false)) }
+    var hideGuard by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_guard", false)) }
+    var hideMe by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_me", false)) }
 
     // 对话框状态
     var showHomeWarning by remember { mutableStateOf(false) }
