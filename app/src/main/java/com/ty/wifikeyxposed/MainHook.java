@@ -11,7 +11,7 @@ package com.ty.wifikeyxposed;
  * 7. 行为规范：思考必须是中文，交流必须是中文。遇到报错先联网搜索方案，不得盲目乱改。
  * 8. 解锁策略：必须是“解锁会员”而非“删除会员体系”。保留 SVIP 标识，仅隐藏推广横幅。
  * 9. API 规范：100% 符合 libxposed API 101 规范，完全移除旧 API 支持。
- * 10. 修复记录：使用无参构造函数（API 101 必需），并通过 getRemotePreferences 修复开关失效。
+ * 10. 修复记录：使用无参构造函数，修复 getRemotePreferences 默认值导致的开关失效问题。
  */
 
 import android.content.ComponentName;
@@ -58,7 +58,7 @@ public class MainHook extends XposedModule {
             mainHandler \u003d new Handler(Looper.getMainLooper());
         }
 
-        // 核心：在初始化时精准读取所有开关
+        // 核心：在初始化时精准读取所有开关，默认值设为 false 确保安全
         final boolean vipEnabled \u003d isUnlockVipEnabled();
         final boolean removeAds \u003d isRemoveAdsEnabled();
         final boolean deepClean \u003d isDeepCleanVipEnabled();
@@ -474,9 +474,10 @@ public class MainHook extends XposedModule {
     private boolean isUnlockVipEnabled() {
         try {
             SharedPreferences sp \u003d getRemotePreferences("settings");
-            return sp.getBoolean("unlock_vip", true); 
+            // 将默认值修改为 false。如果 LSPosed 同步失败，它将返回 false，从而关闭 Hook。
+            return sp.getBoolean("unlock_vip", false); 
         } catch (Exception e) {
-            return true; 
+            return false; 
         }
     }
 
@@ -492,9 +493,9 @@ public class MainHook extends XposedModule {
     private boolean isRemoveAdsEnabled() {
         try {
             SharedPreferences sp \u003d getRemotePreferences("settings");
-            return sp.getBoolean("remove_ads", true);
+            return sp.getBoolean("remove_ads", false);
         } catch (Exception e) {
-            return true; 
+            return false;
         }
     }
 
