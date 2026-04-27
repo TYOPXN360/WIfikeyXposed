@@ -224,14 +224,19 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                     
                     Toast.makeText(context, "正在通知应用自杀重启...", Toast.LENGTH_SHORT).show()
                     
-                    // 2. 延迟拉起应用
+                    // 2. 增加延迟并增强拉起逻辑
                     android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                         val launchIntent = context.packageManager.getLaunchIntentForPackage(packageName)
                         if (launchIntent != null) {
-                            launchIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                            context.startActivity(launchIntent)
+                            // 增加 FLAG_ACTIVITY_CLEAR_TASK 确保是全新的冷启动
+                            launchIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                            try {
+                                context.startActivity(launchIntent)
+                            } catch (e: Exception) {
+                                android.util.Log.e("WiFiKeyXposed", "Launch failed: " + e.message)
+                            }
                         }
-                    }, 800)
+                    }, 1500)
                 },
                 modifier = Modifier.fillMaxWidth(),
                 shape = MaterialTheme.shapes.extraLarge,
