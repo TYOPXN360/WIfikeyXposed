@@ -218,25 +218,39 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                     val restartAction = "com.ty.wifikeyxposed.ACTION_RESTART"
                     
                     // 1. 发送免 Root 自杀广播
-                    val intent = android.content.Intent(restartAction)
-                    intent.setPackage(packageName)
-                    context.sendBroadcast(intent)
+                    val suicideIntent = android.content.Intent(restartAction).apply {
+                        setPackage(packageName)
+                    }
+                    context.sendBroadcast(suicideIntent)
                     
-                    Toast.makeText(context, "正在通知应用自杀重启...", Toast.LENGTH_SHORT).show()
-                    
-                    // 2. 增加延迟并增强拉起逻辑
-                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                    // 2. 利用 AlarmManager 实现系统级延时拉起 (真正意义上的模块自行发起)
+                    try {
+                        val am = context.getSystemService(android.content.Context.ALARM_SERVICE) as android.app.AlarmManager
                         val launchIntent = context.packageManager.getLaunchIntentForPackage(packageName)
                         if (launchIntent != null) {
-                            // 增加 FLAG_ACTIVITY_CLEAR_TASK 确保是全新的冷启动
                             launchIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                            try {
-                                context.startActivity(launchIntent)
-                            } catch (e: Exception) {
-                                android.util.Log.e("WiFiKeyXposed", "Launch failed: " + e.message)
+                            
+                            val pendingIntent = android.app.PendingIntent.getActivity(
+                                context, 
+                                0, 
+                                launchIntent, 
+                                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+                            )
+                            
+                            // 预约 1.5 秒后拉起
+                            val triggerTime = System.currentTimeMillis() + 1500
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                                am.setExactAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
+                            } else {
+                                am.setExact(android.app.AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
                             }
+                            
+                            Toast.makeText(context, "已预约系统在 1.5s 后重载应用", Toast.LENGTH_SHORT).show()
                         }
-                    }, 1500)
+                    } catch (e: Exception) {
+                        android.util.Log.e("WiFiKeyXposed", "Alarm setup failed: " + e.message)
+                        Toast.makeText(context, "拉起预约失败，请手动打开", Toast.LENGTH_SHORT).show()
+                    }
                 },
                 modifier = Modifier.fillMaxWidth(),
                 shape = MaterialTheme.shapes.extraLarge,
