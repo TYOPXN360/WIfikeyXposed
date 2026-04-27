@@ -23,8 +23,14 @@
 - [x] **初始化仓库**: 项目已初始化 Git 仓库，并完成了 Initial Commit。
 - [x] **干净代码库**: 已配置 `.gitignore` 自动忽略大型二进制文件（APK）、编译缓存及 400MB+ 的反编译源码。
 
+## 自动化构建与环境配置
+- [x] **统一项目结构**: 已将项目文件移至根目录，现在可直接在根目录下执行 `./gradlew assembleDebug` 进行构建。
+- [x] **Java 环境自适配**:
+    - 已在 `MainHook.java` 注释中明确 Java 21 路径：`/media/tyopxn360/Android/MC/Java/Java21`。
+    - `deploy_and_log.sh` 已配置为使用正确的 `JAVA_HOME`。
+
 ## 验证与交付
-- **最新模块 APK**: `/mnt/TY/android/android-project/WIfikeyXposed/project_files/app/build/outputs/apk/debug/app-debug.apk`
+- **最新模块 APK**: `/mnt/TY/android/android-project/WIfikeyXposed/app/build/outputs/apk/debug/app-debug.apk`
 - **操作指南**:
     1. 启用模块后，进入 App -> 我的 -> **Wifi万能钥匙增强** 进行功能配置。
-    2. 运行 `./deploy_and_log.sh` 同步最新逻辑。
+    2. 运行根目录下的 `./deploy_and_log.sh` 自动完成构建、安装及日志抓取。
