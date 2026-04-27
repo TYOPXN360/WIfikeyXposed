@@ -249,7 +249,7 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
             ) {
                 Icon(Icons.Default.Bolt, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("免 Root 强力重启应用", fontWeight = FontWeight.Bold)
+                Text("重启应用", fontWeight = FontWeight.Bold)
             }
             
             Text(
