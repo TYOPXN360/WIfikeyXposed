@@ -223,8 +223,8 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                     )
                     
                     if (removeCloudControl) {
-                        Box(modifier = Modifier.padding(start = 56.dp, bottom = 8.dp, end = 16.dp)) {
-                            TextButton(
+                        Box(modifier = Modifier.padding(start = 56.dp, bottom = 12.dp, end = 16.dp)) {
+                            OutlinedButton(
                                 onClick = {
                                     val packageName = "com.snda.wifilocating"
                                     val clearAction = "com.ty.wifikeyxposed.ACTION_CLEAR_CLOUD"
@@ -233,11 +233,13 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                                     Toast.makeText(context, "云控配置已清除", Toast.LENGTH_SHORT).show()
                                 },
                                 modifier = Modifier.fillMaxWidth(),
-                                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                                shape = MaterialTheme.shapes.medium,
+                                border = ButtonDefaults.outlinedButtonBorder.copy(brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.error.copy(alpha = 0.5f))),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
                             ) {
                                 Icon(Icons.Default.DeleteSweep, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("立即清除已有的云控配置缓存", fontSize = 13.sp)
+                                Text("清除云控配置", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                             }
                         }
                     }
