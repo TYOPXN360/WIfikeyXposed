@@ -8,6 +8,7 @@ package com.ty.wifikeyxposed;
  * 4. 强制要求：所有更改必须进行 Git Commit。
  * 5. 日志查看方法：adb logcat -s LSPosed LSPosed-Bridge WiFiKeyXposed
  * 6. Java 路径: /media/tyopxn360/Android/MC/Java/Java21
+ * 7. 行为规范：思考必须是中文，交流必须是中文。遇到报错先联网搜索方案，不得盲目乱改。
  */
 
 import android.content.ComponentName;
