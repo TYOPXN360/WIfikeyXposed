@@ -131,21 +131,58 @@ public class MainHook extends XposedModule {
 
     private void hookMeFragment(ClassLoader classLoader) {
         try {
-            Class<?> meFragmentClass \u003d classLoader.loadClass(ME_FRAGMENT_CLASS);
-            Method a2Method \u003d meFragmentClass.getDeclaredMethod("a2");
+            Class<?> meFragmentClass = classLoader.loadClass(ME_FRAGMENT_CLASS);
+            
+            // 1. Hook a2 to inject settings entry
+            Method a2Method = meFragmentClass.getDeclaredMethod("a2");
             a2Method.setAccessible(true);
-
             hook(a2Method).intercept(new XposedInterface.Hooker() {
                 @Override
                 public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable {
-                    Object result \u003d chain.proceed();
-                    final Object meFragment \u003d chain.getThisObject();
-                    try {
-                        injectCustomSettings(meFragment);
-                    } catch (Exception ignored) {}
+                    Object result = chain.proceed();
+                    try { injectCustomSettings(chain.getThisObject()); } catch (Exception ignored) {}
                     return result;
                 }
             });
+
+            // 2. Hook b2 (Vip Widget loader) to suppress banners
+            Method b2Method = meFragmentClass.getDeclaredMethod("b2");
+            b2Method.setAccessible(true);
+            hook(b2Method).intercept(new XposedInterface.Hooker() {
+                @Override
+                public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable {
+                    if (isUnlockVipEnabled()) return null; // Suppress VIP widgets
+                    return chain.proceed();
+                }
+            });
+
+            // 3. Force hide VIP regions in onCreateView or onResume
+            Method onResumeMethod = meFragmentClass.getDeclaredMethod("onResume");
+            hook(onResumeMethod).intercept(new XposedInterface.Hooker() {
+                @Override
+                public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable {
+                    Object result = chain.proceed();
+                    if (isUnlockVipEnabled()) {
+                        hideVipBanners(chain.getThisObject());
+                    }
+                    return result;
+                }
+            });
+        } catch (Exception ignored) {}
+    }
+
+    private void hideVipBanners(Object meFragment) {
+        try {
+            Object binding = findBindingField(meFragment);
+            if (binding == null) return;
+            
+            String[] regions = {"regionVip", "regionMovieVip", "vipFlag", "vipSepWifiFlag", "vipSepMovieFlag"};
+            for (String name : regions) {
+                View view = getFieldSafe(binding, name);
+                if (view != null) {
+                    view.post(() -> view.setVisibility(View.GONE));
+                }
+            }
         } catch (Exception ignored) {}
     }
 
