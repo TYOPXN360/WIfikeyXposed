@@ -226,7 +226,7 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                     }
                     context.sendBroadcast(intent)
                     
-                    Toast.makeText(context, "正在发起免 Root 重启...", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "重启中...", Toast.LENGTH_SHORT).show()
                     
                     // 2. 延迟 1.5 秒后，通过显式类名直接拉起
                     android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
