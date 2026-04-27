@@ -5,22 +5,25 @@ package com.ty.wifikeyxposed;
  * 1. 目标应用：WiFi万能钥匙 5.2.13 (com.snda.wifilocating)
  * 2. 核心功能：本地 SVIP 永久解锁、全模块去广告 (开屏/列表/视频)、MD3E 设置界面。
  * 3. 创新功能：精简版青少年模式。利用内置拦截实现净化，剥离密码与时长限制。
- * 4. 验证流程：每次更改后构建 APK，通过 ADB 安装，重启目标应用，查看 LSPosed 日志。
- * 5. 强制要求：所有更改必须进行 Git Commit。
- * 6. 日志查看方法：adb logcat -s LSPosed LSPosed-Bridge WiFiKeyXposed
+ * 4. 交互增强：实现免 Root 自杀式重启机制。
+ * 5. 验证流程：每次更改后构建 APK，通过 ADB 安装，重启目标应用，查看 LSPosed 日志。
+ * 6. 强制要求：所有更改必须进行 Git Commit。
  * 7. 行为规范：思考必须是中文，交流必须是中文。
- * 8. 解锁策略：必须是“解锁会员”而非“删除会员体系”。保留 SVIP 标识，仅隐藏推广横幅。
- * 9. API 规范：100% 符合 libxposed API 101 规范。
+ * 8. API 规范：100% 符合 libxposed API 101 规范。
  */
 
+import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Process;
 import android.view.View;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -40,6 +43,7 @@ public class MainHook extends XposedModule {
     private static final String TARGET_PACKAGE = "com.snda.wifilocating";
     private static final String ME_FRAGMENT_CLASS = "com.wifitutu.ui.me.MeFragment";
     private static final String TEENAGER_MANAGER_CLASS = "com.wifitutu.link.foundation.sdk.c1";
+    private static final String ACTION_RESTART = "com.ty.wifikeyxposed.ACTION_RESTART";
 
     private Handler mainHandler;
 
@@ -75,6 +79,7 @@ public class MainHook extends XposedModule {
         ClassLoader classLoader = param.getClassLoader();
         
         try {
+            hookRestartLogic(classLoader);
             hookMeFragment(classLoader);
             hookPushNotifications(classLoader);
             hookVipStatus(classLoader);
@@ -88,30 +93,56 @@ public class MainHook extends XposedModule {
     }
 
     /**
-     * 实现“精简版青少年模式”
-     * 1. 强制 isRunning 返回 true (当开关开启时)
-     * 2. 强制 isLimited 返回 false (移除 40 分钟限制)
-     * 3. 屏蔽 ow() 方法 (移除后台定时器启动)
+     * 实现免 Root 自杀式重启
+     * 在 Application.onCreate 中注册广播监听，收到指令后立即终止进程
      */
+    private void hookRestartLogic(ClassLoader classLoader) {
+        try {
+            Class<?> appClass = classLoader.loadClass("android.app.Application");
+            Method onCreateMethod = appClass.getDeclaredMethod("onCreate");
+            
+            hook(onCreateMethod).intercept(chain -> {
+                Object result = chain.proceed();
+                final Context context = (Context) chain.getThisObject();
+                
+                BroadcastReceiver restartReceiver = new BroadcastReceiver() {
+                    @Override
+                    public void onReceive(Context context, Intent intent) {
+                        log(4, TAG, "Received restart broadcast, killing process: " + Process.myPid());
+                        Process.killProcess(Process.myPid());
+                        System.exit(0);
+                    }
+                };
+                
+                IntentFilter filter = new IntentFilter(ACTION_RESTART);
+                if (Build.VERSION.SDK_INT >= 34) { // Android 14+
+                    context.registerReceiver(restartReceiver, filter, Context.RECEIVER_EXPORTED);
+                } else {
+                    context.registerReceiver(restartReceiver, filter);
+                }
+                return result;
+            });
+        } catch (Exception e) {
+            log(6, TAG, "Failed to hook restart logic: " + e.getMessage());
+        }
+    }
+
     private void hookTeenagerMode(ClassLoader classLoader) {
         try {
             Class<?> teenagerClass = classLoader.loadClass(TEENAGER_MANAGER_CLASS);
             
-            // 判定开启状态
             Method isRunningMethod = teenagerClass.getDeclaredMethod("isRunning");
             hook(isRunningMethod).intercept(chain -> {
                 if (isFeatureEnabled("lite_teenager", false)) return true;
                 return chain.proceed();
             });
 
-            // 判定受限状态 (永久解除时长限制弹窗)
             Method isLimitedMethod = teenagerClass.getDeclaredMethod("isLimited");
             hook(isLimitedMethod).intercept(chain -> {
                 if (isFeatureEnabled("lite_teenager", false)) return false;
                 return chain.proceed();
             });
 
-            // 屏蔽定时器启动逻辑
             try {
                 Method owMethod = teenagerClass.getDeclaredMethod("ow");
                 hook(owMethod).intercept(chain -> {

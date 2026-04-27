@@ -214,41 +214,36 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
 
             Button(
                 onClick = {
-                    try {
-                        val packageName = "com.snda.wifilocating"
-                        // 尝试使用 root 强杀并重启 (大多数 Xposed 用户都有 root)
-                        val process = Runtime.getRuntime().exec("su")
-                        val os = process.outputStream
-                        os.write("am force-stop $packageName\n".toByteArray())
-                        os.write("monkey -p $packageName -c android.intent.category.LAUNCHER 1\n".toByteArray())
-                        os.flush()
-                        os.close()
-                        Toast.makeText(context, "正在尝试重启应用...", Toast.LENGTH_SHORT).show()
-                    } catch (e: Exception) {
-                        // 如果没有 root，回退到普通启动 (至少能打开应用)
-                        try {
-                            val intent = context.packageManager.getLaunchIntentForPackage("com.snda.wifilocating")
-                            if (intent != null) {
-                                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                                context.startActivity(intent)
-                                Toast.makeText(context, "Root 权限缺失，已尝试普通启动", Toast.LENGTH_LONG).show()
-                            }
-                        } catch (e2: Exception) {
-                            Toast.makeText(context, "操作失败: " + e2.message, Toast.LENGTH_SHORT).show()
+                    val packageName = "com.snda.wifilocating"
+                    val restartAction = "com.ty.wifikeyxposed.ACTION_RESTART"
+                    
+                    // 1. 发送免 Root 自杀广播
+                    val intent = android.content.Intent(restartAction)
+                    intent.setPackage(packageName)
+                    context.sendBroadcast(intent)
+                    
+                    Toast.makeText(context, "正在通知应用自杀重启...", Toast.LENGTH_SHORT).show()
+                    
+                    // 2. 延迟拉起应用
+                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                        val launchIntent = context.packageManager.getLaunchIntentForPackage(packageName)
+                        if (launchIntent != null) {
+                            launchIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                            context.startActivity(launchIntent)
                         }
-                    }
+                    }, 800)
                 },
                 modifier = Modifier.fillMaxWidth(),
                 shape = MaterialTheme.shapes.extraLarge,
                 contentPadding = PaddingValues(16.dp)
             ) {
-                Icon(Icons.Default.Refresh, contentDescription = null)
+                Icon(Icons.Default.Bolt, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("保存并重启 WiFi 万能钥匙", fontWeight = FontWeight.Bold)
+                Text("免 Root 极速重启应用", fontWeight = FontWeight.Bold)
             }
             
             Text(
-                "提示：重启操作需要 Root 权限以实现完全强杀",
+                "提示：利用 Xposed 注入逻辑实现应用的秒杀与重载",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.secondary,
                 modifier = Modifier.padding(top = 8.dp, start = 16.dp)
