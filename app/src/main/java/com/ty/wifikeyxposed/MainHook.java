@@ -4,7 +4,7 @@ package com.ty.wifikeyxposed;
  * 用户需求核心摘要 (CONTEXT RESTORE):
  * 1. 目标应用：WiFi万能钥匙 5.2.13 (com.snda.wifilocating)
  * 2. 核心功能：本地 SVIP 永久解锁、全模块去广告 (开屏/列表/视频)、MD3E 设置界面。
- * 3. 创新功能：精简版青少年模式。利用内置拦截实现净化，剥离密码与时长限制。
+ * 3. 创新功能：精简版青少年模式、去除云控系统。
  * 4. 交互增强：实现稳定版免 Root 重启机制。
  * 5. 验证流程：每次更改后构建 APK，通过 ADB 安装，重启目标应用，查看 LSPosed 日志。
  * 6. 强制要求：所有更改必须进行 Git Commit。
@@ -43,6 +43,9 @@ public class MainHook extends XposedModule {
     private static final String TARGET_PACKAGE = "com.snda.wifilocating";
     private static final String ME_FRAGMENT_CLASS = "com.wifitutu.ui.me.MeFragment";
     private static final String TEENAGER_MANAGER_CLASS = "com.wifitutu.link.foundation.sdk.c1";
+    private static final String AD_STRATEGY_CLASS = "com.wifi.business.potocol.sdk.base.strategy.AdStrategy";
+    private static final String REMOTE_CONFIG_INTERFACE = "com.link.ida.sdk.protocol.api.interfaces.IWfRemoteConfig";
+    private static final String URI_CHECKER_CLASS = "com.wifitutu.ui.dialog.c";
     private static final String ACTION_RESTART = "com.ty.wifikeyxposed.ACTION_RESTART";
 
     private Handler mainHandler;
@@ -87,15 +90,67 @@ public class MainHook extends XposedModule {
             hookCommonFlags(classLoader);
             hookAds(classLoader);
             hookTeenagerMode(classLoader);
+            hookCloudControl(classLoader);
         } catch (Throwable e) {
             log(6, TAG, "Initialization error: " + e.getMessage());
         }
     }
 
     /**
-     * 实现纯净的自杀逻辑
-     * 收到广播后立即终止当前进程及其所有加载了模块的子进程
+     * 实现云控功能去除
+     * 1. 屏蔽远程配置获取 (getConfig -> null)
+     * 2. 中和太极 (TaiChi) AB测试分流
+     * 3. 绕过云控 URI 拦截检查
      */
+    private void hookCloudControl(ClassLoader classLoader) {
+        try {
+            // 1. 拦截远程配置接口
+            try {
+                Class<?> remoteConfigCls = classLoader.loadClass(REMOTE_CONFIG_INTERFACE);
+                for (Method m : remoteConfigCls.getDeclaredMethods()) {
+                    if (m.getName().equals("getConfig")) {
+                        hook(m).intercept(chain -> {
+                            if (isFeatureEnabled("remove_cloud_control", false)) return null;
+                            return chain.proceed();
+                        });
+                    }
+                }
+            } catch (Exception ignored) {}
+
+            // 2. 中和广告策略中的太极值
+            try {
+                Class<?> adStrategyCls = classLoader.loadClass(AD_STRATEGY_CLASS);
+                Method getTaiChiMethod = adStrategyCls.getDeclaredMethod("getTaiChiValue");
+                hook(getTaiChiMethod).intercept(chain -> {
+                    if (isFeatureEnabled("remove_cloud_control", false)) return "";
+                    return chain.proceed();
+                });
+            } catch (Exception ignored) {}
+
+            // 3. 绕过 URI 云控拦截 (com.wifitutu.ui.dialog.c 类中的校验方法)
+            try {
+                Class<?> uriCheckerCls = classLoader.loadClass(URI_CHECKER_CLASS);
+                String[] checkMethods = {"h", "i", "k", "l", "m"};
+                for (String name : checkMethods) {
+                    try {
+                        // 这些方法通常返回 boolean
+                        for (Method m : uriCheckerCls.getDeclaredMethods()) {
+                            if (m.getName().equals(name) && m.getReturnType() == boolean.class) {
+                                hook(m).intercept(chain -> {
+                                    if (isFeatureEnabled("remove_cloud_control", false)) return true;
+                                    return chain.proceed();
+                                });
+                            }
+                        }
+                    } catch (Exception ignored) {}
+                }
+            } catch (Exception ignored) {}
+
+        } catch (Exception e) {
+            log(6, TAG, "Failed to hook CloudControl: " + e.getMessage());
+        }
+    }
+
     private void hookRestartLogic(ClassLoader classLoader) {
         try {
             Class<?> appClass = classLoader.loadClass("android.app.Application");

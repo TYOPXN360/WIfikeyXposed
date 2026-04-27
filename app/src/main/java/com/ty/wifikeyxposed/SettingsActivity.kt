@@ -101,8 +101,9 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
     var deepCleanVip by remember { mutableStateOf(prefs.getBoolean("deep_clean_vip", false)) }
     var removeAds by remember { mutableStateOf(prefs.getBoolean("remove_ads", false)) }
     var liteTeenager by remember { mutableStateOf(prefs.getBoolean("lite_teenager", false)) }
+    var removeCloudControl by remember { mutableStateOf(prefs.getBoolean("remove_cloud_control", false)) }
 
-    val allSelected = blockNews && unlockVip && deepCleanVip && removeAds && liteTeenager
+    val allSelected = blockNews && unlockVip && deepCleanVip && removeAds && liteTeenager && removeCloudControl
 
     Scaffold(
         topBar = {
@@ -207,6 +208,17 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                         onCheckedChange = {
                             liteTeenager = it
                             prefs.edit().putBoolean("lite_teenager", it).apply()
+                        }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "去除云控系统",
+                        subtitle = "屏蔽远程策略下发，防止本地功能被服务器覆盖",
+                        icon = Icons.Default.CloudOff,
+                        checked = removeCloudControl,
+                        onCheckedChange = {
+                            removeCloudControl = it
+                            prefs.edit().putBoolean("remove_cloud_control", it).apply()
                         }
                     )
                 }
