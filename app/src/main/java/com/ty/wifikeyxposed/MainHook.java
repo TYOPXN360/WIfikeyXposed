@@ -11,6 +11,7 @@ package com.ty.wifikeyxposed;
  * 7. 行为规范：思考必须是中文，交流必须是中文。遇到报错先联网搜索方案，不得盲目乱改。
  * 8. 解锁策略：必须是“解锁会员”而非“删除会员体系”。保留 SVIP 标识，仅隐藏推广横幅。
  * 9. API 规范：100% 符合 libxposed API 101 规范，完全移除旧 API 支持。
+ * 10. 修复记录：使用无参构造函数（API 101 必需），并通过 getRemotePreferences("settings") 强制使用 LSPosed 代理读取偏好设置。
  */
 
 import android.content.ComponentName;
@@ -477,7 +478,8 @@ public class MainHook extends XposedModule {
 
     private boolean isDeepCleanVipEnabled() {
         try {
-            return getRemotePreferences("settings").getBoolean("deep_clean_vip", false);
+            SharedPreferences sp \u003d getRemotePreferences("settings");
+            return sp.getBoolean("deep_clean_vip", false);
         } catch (Exception e) {
             return false;
         }
@@ -485,15 +487,17 @@ public class MainHook extends XposedModule {
 
     private boolean isRemoveAdsEnabled() {
         try {
-            return getRemotePreferences("settings").getBoolean("remove_ads", true);
+            SharedPreferences sp \u003d getRemotePreferences("settings");
+            return sp.getBoolean("remove_ads", true);
         } catch (Exception e) {
-            return true;
+            return true; 
         }
     }
 
     private boolean isBlockNewsEnabled() {
         try {
-            return getRemotePreferences("settings").getBoolean("block_news", false);
+            SharedPreferences sp \u003d getRemotePreferences("settings");
+            return sp.getBoolean("block_news", false);
         } catch (Exception e) {
             return false;
         }
