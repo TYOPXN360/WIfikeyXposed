@@ -50,8 +50,65 @@ public class MainHook extends XposedModule {
             hookVipStatus(classLoader, vipEnabled);
             hookStorage(classLoader, vipEnabled);
             hookCommonFlags(classLoader, vipEnabled);
+            hookAds(classLoader);
         } catch (Throwable e) {
             log(6, TAG, "Initialization error: " + e.getMessage());
+        }
+    }
+
+    private void hookAds(ClassLoader classLoader) {
+        if (!isRemoveAdsEnabled()) return;
+        
+        XposedInterface.Hooker returnTrueHooker = new XposedInterface.Hooker() {
+            @Override public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable { return true; }
+        };
+        XposedInterface.Hooker returnFalseHooker = new XposedInterface.Hooker() {
+            @Override public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable { return false; }
+        };
+
+        try {
+            // 1. AbstractAds.isBlocked() -> true
+            Class<?> abstractAdsClass = classLoader.loadClass("com.wifi.business.potocol.sdk.base.ad.AbstractAds");
+            Method isBlockedMethod = abstractAdsClass.getDeclaredMethod("isBlocked");
+            hook(isBlockedMethod).intercept(returnTrueHooker);
+        } catch (Exception ignored) {}
+
+        try {
+            // 2. AdStrategy.getBlock() -> true
+            Class<?> adStrategyClass = classLoader.loadClass("com.wifi.business.potocol.sdk.base.strategy.AdStrategy");
+            Method getBlockMethod = adStrategyClass.getDeclaredMethod("getBlock");
+            hook(getBlockMethod).intercept(returnTrueHooker);
+        } catch (Exception ignored) {}
+
+        try {
+            // 3. Ad manager decision methods -> false (meaning don't show)
+            String[] managerClasses = {
+                "com.wifitutu.ad.imp.busi.manager.b",
+                "com.wifitutu.ad.imp.busi.manager.f"
+            };
+            for (String clsName : managerClasses) {
+                try {
+                    Class<?> cls = classLoader.loadClass(clsName);
+                    Method aMethod = cls.getDeclaredMethod("a", classLoader.loadClass("vt.c"));
+                    hook(aMethod).intercept(returnFalseHooker);
+                } catch (Exception ignored) {}
+            }
+        } catch (Exception ignored) {}
+        
+        try {
+            // 4. AdsFilter.isBlock -> true
+            Class<?> adsFilterClass = classLoader.loadClass("com.wifi.business.potocol.sdk.base.utils.AdsFilter");
+            Field isBlockField = adsFilterClass.getDeclaredField("isBlock");
+            isBlockField.setAccessible(true);
+            isBlockField.set(null, true);
+        } catch (Exception ignored) {}
+    }
+
+    private boolean isRemoveAdsEnabled() {
+        try {
+            return getRemotePreferences("settings").getBoolean("remove_ads", true);
+        } catch (Exception e) {
+            return true;
         }
     }
 

@@ -119,6 +119,17 @@ public class SettingsActivity extends Activity {
         // 2. 解锁会员 (新功能)
         card.addView(createMD3ESwitchItem("解锁本地会员", "unlock_vip", "开启极速连接等会员特权", prefs));
         
+        // 增加分割线
+        View div2 = new View(this);
+        div2.setBackgroundColor(colorControlNormal);
+        div2.setAlpha(0.1f);
+        LinearLayout.LayoutParams divLp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 2);
+        divLp2.setMargins(0, 20, 0, 20);
+        card.addView(div2, divLp2);
+
+        // 3. 去广告
+        card.addView(createMD3ESwitchItem("去除内置广告", "remove_ads", "拦截开屏、列表及视频广告", prefs));
+
         content.addView(card);
         
         scrollView.addView(content);
