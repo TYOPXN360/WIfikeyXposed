@@ -4,10 +4,10 @@ package com.ty.wifikeyxposed;
  * 用户需求核心摘要 (CONTEXT RESTORE):
  * 1. 目标应用：WiFi万能钥匙 5.2.13 (com.snda.wifilocating)
  * 2. 核心功能：本地 SVIP 永久解锁、全模块去广告 (开屏/列表/视频)、MD3E 设置界面。
- * 3. 创新功能：精简版青少年模式、去除云控系统、一键清除云控缓存、底栏极致精简。
- * 4. 交互增强：实现稳定版免 Root 重启机制、高风险操作倒计时二次确认。
- * 5. 验证流程：每次更改后构建 APK，通过 ADB 安装，重启目标应用，查看 LSPosed 日志。
- * 6. 强制要求：所有更改必须进行 Git Commit。
+ * 3. 创新功能：底栏极致精简，且实现状态双向同步。
+ * 4. 逻辑增强：实时监控应用底栏开启情况。若应用隐藏了某项，则模块设置自动标记为“精简开启”。
+ * 5. 交互增强：实现稳定版免 Root 重启机制、高风险操作倒计时二次确认。
+ * 6. 验证流程：每次更改后构建 APK，通过 ADB 安装，重启目标应用，查看 LSPosed 日志。
  * 7. 行为规范：思考必须是中文，交流必须是中文。
  * 8. API 规范：100% 符合 libxposed API 101 规范。
  */
@@ -51,6 +51,7 @@ public class MainHook extends XposedModule {
     private static final String ACTION_CLEAR_CLOUD = "com.ty.wifikeyxposed.ACTION_CLEAR_CLOUD";
 
     private Handler mainHandler;
+    private boolean isPerformingForcedHide = false;
 
     public MainHook() {
         super();
@@ -59,13 +60,22 @@ public class MainHook extends XposedModule {
     private boolean isFeatureEnabled(String key, boolean def) {
         try {
             SharedPreferences sp = getRemotePreferences("settings");
-            if (sp.contains(key)) {
-                return sp.getBoolean(key, def);
+            return sp.getBoolean(key, def);
+        } catch (Exception e) {
+            return def;
+        }
+    }
+
+    private void updateFeatureState(String key, boolean value) {
+        try {
+            SharedPreferences sp = getRemotePreferences("settings");
+            if (sp.getBoolean(key, !value) != value) {
+                sp.edit().putBoolean(key, value).apply();
+                log(4, TAG, "Auto-synced tab state: " + key + " -> " + value);
             }
         } catch (Exception e) {
-            log(6, TAG, "Failed to read remote prefs: " + e.getMessage());
+            log(6, TAG, "Failed to update remote prefs: " + e.getMessage());
         }
-        return def;
     }
 
     @Override
@@ -99,30 +109,37 @@ public class MainHook extends XposedModule {
         }
     }
 
-    /**
-     * 实现底栏精简功能
-     * 1. Hook 所有 View.setVisibility，如果是底栏按钮且配置为隐藏，则强制保持 GONE
-     * 2. 在 MainActivity 生命周期中主动刷新一次状态
-     */
     private void hookBottomNavigation(ClassLoader classLoader) {
         try {
             Class<?> viewCls = classLoader.loadClass("android.view.View");
             Method setVisibilityMethod = viewCls.getMethod("setVisibility", int.class);
 
             hook(setVisibilityMethod).intercept(chain -> {
+                if (isPerformingForcedHide) return chain.proceed();
+
                 View view = (View) chain.getThisObject();
                 int id = view.getId();
                 if (id == View.NO_ID) return chain.proceed();
 
-                // 如果该 ID 属于我们想要隐藏的底栏项，且当前尝试设为 VISIBLE
-                int visibility = (int) chain.getArgs().get(0);
-                if (visibility == View.VISIBLE && shouldHideTab(view, id)) {
-                    return null; // 拦截，保持 GONE
+                String resName = null;
+                try { resName = view.getResources().getResourceEntryName(id); } catch (Exception ignored) {}
+                if (resName == null || !resName.startsWith("navigation_")) return chain.proceed();
+
+                int requestedVisibility = (int) chain.getArgs().get(0);
+                String prefKey = mapResNameToPrefKey(resName);
+                if (prefKey == null) return chain.proceed();
+
+                if (requestedVisibility == View.VISIBLE && isFeatureEnabled(prefKey, false)) {
+                    return null; 
                 }
+
+                if (requestedVisibility == View.GONE) {
+                    updateFeatureState(prefKey, true);
+                }
+
                 return chain.proceed();
             });
 
-            // 针对 MainActivity 生命周期执行主动隐藏
             try {
                 Class<?> mainActivityCls = classLoader.loadClass("com.wifitutu.ui.main.MainActivity");
                 Method onResumeMethod = mainActivityCls.getDeclaredMethod("onResume");
@@ -138,26 +155,23 @@ public class MainHook extends XposedModule {
         }
     }
 
-    private boolean shouldHideTab(View v, int id) {
-        try {
-            // 通过资源名匹配，防止动态 ID 漂移
-            String name = v.getResources().getResourceEntryName(id);
-            if (name == null) return false;
-            
-            if ("navigation_home".equals(name)) return isFeatureEnabled("hide_tab_home", false);
-            if ("navigation_nearby".equals(name)) return isFeatureEnabled("hide_tab_nearby", false);
-            if ("navigation_video".equals(name)) return isFeatureEnabled("hide_tab_video", false);
-            if ("navigation_welfare".equals(name)) return isFeatureEnabled("hide_tab_welfare", false);
-            if ("navigation_im".equals(name)) return isFeatureEnabled("hide_tab_im", false);
-            if ("navigation_web".equals(name)) return isFeatureEnabled("hide_tab_web", false);
-            if ("navigation_guard".equals(name)) return isFeatureEnabled("hide_tab_guard", false);
-            if ("navigation_me".equals(name)) return isFeatureEnabled("hide_tab_me", false);
-        } catch (Exception ignored) {}
-        return false;
+    private String mapResNameToPrefKey(String resName) {
+        switch (resName) {
+            case "navigation_home": return "hide_tab_home";
+            case "navigation_nearby": return "hide_tab_nearby";
+            case "navigation_video": return "hide_tab_video";
+            case "navigation_welfare": return "hide_tab_welfare";
+            case "navigation_im": return "hide_tab_im";
+            case "navigation_web": return "hide_tab_web";
+            case "navigation_guard": return "hide_tab_guard";
+            case "navigation_me": return "hide_tab_me";
+            default: return null;
+        }
     }
 
     private void refreshBottomTabs(Object mainActivity) {
         try {
+            isPerformingForcedHide = true;
             android.app.Activity activity = (android.app.Activity) mainActivity;
             View root = activity.getWindow().getDecorView();
             String[] tabNames = {
@@ -170,12 +184,20 @@ public class MainHook extends XposedModule {
                 int id = activity.getResources().getIdentifier(name, "id", TARGET_PACKAGE);
                 if (id != 0) {
                     View v = root.findViewById(id);
-                    if (v != null && shouldHideTab(v, id)) {
-                        v.setVisibility(View.GONE);
+                    if (v != null) {
+                        String prefKey = mapResNameToPrefKey(name);
+                        if (isFeatureEnabled(prefKey, false)) {
+                            v.setVisibility(View.GONE);
+                        } else if (v.getVisibility() == View.GONE) {
+                            updateFeatureState(prefKey, true);
+                        }
                     }
                 }
             }
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        } finally {
+            isPerformingForcedHide = false;
+        }
     }
 
     private void hookCloudControl(ClassLoader classLoader) {
