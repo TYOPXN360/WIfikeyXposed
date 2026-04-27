@@ -4,7 +4,7 @@ package com.ty.wifikeyxposed;
  * 用户需求核心摘要 (CONTEXT RESTORE):
  * 1. 目标应用：WiFi万能钥匙 5.2.13 (com.snda.wifilocating)
  * 2. 核心功能：本地 SVIP 永久解锁、全模块去广告 (开屏/列表/视频)、MD3E 设置界面。
- * 3. 创新功能：精简版青少年模式、去除云控系统。
+ * 3. 创新功能：精简版青少年模式、去除云控系统、一键清除云控缓存。
  * 4. 交互增强：实现稳定版免 Root 重启机制。
  * 5. 验证流程：每次更改后构建 APK，通过 ADB 安装，重启目标应用，查看 LSPosed 日志。
  * 6. 强制要求：所有更改必须进行 Git Commit。
@@ -33,6 +33,7 @@ import androidx.annotation.NonNull;
 import io.github.libxposed.api.XposedInterface;
 import io.github.libxposed.api.XposedModule;
 
+import java.io.File;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -47,6 +48,7 @@ public class MainHook extends XposedModule {
     private static final String REMOTE_CONFIG_INTERFACE = "com.link.ida.sdk.protocol.api.interfaces.IWfRemoteConfig";
     private static final String URI_CHECKER_CLASS = "com.wifitutu.ui.dialog.c";
     private static final String ACTION_RESTART = "com.ty.wifikeyxposed.ACTION_RESTART";
+    private static final String ACTION_CLEAR_CLOUD = "com.ty.wifikeyxposed.ACTION_CLEAR_CLOUD";
 
     private Handler mainHandler;
 
@@ -96,12 +98,6 @@ public class MainHook extends XposedModule {
         }
     }
 
-    /**
-     * 实现云控功能去除
-     * 1. 屏蔽远程配置获取 (getConfig -> null)
-     * 2. 中和太极 (TaiChi) AB测试分流
-     * 3. 绕过云控 URI 拦截检查
-     */
     private void hookCloudControl(ClassLoader classLoader) {
         try {
             // 1. 拦截远程配置接口
@@ -127,13 +123,12 @@ public class MainHook extends XposedModule {
                 });
             } catch (Exception ignored) {}
 
-            // 3. 绕过 URI 云控拦截 (com.wifitutu.ui.dialog.c 类中的校验方法)
+            // 3. 绕过 URI 云控拦截
             try {
                 Class<?> uriCheckerCls = classLoader.loadClass(URI_CHECKER_CLASS);
                 String[] checkMethods = {"h", "i", "k", "l", "m"};
                 for (String name : checkMethods) {
                     try {
-                        // 这些方法通常返回 boolean
                         for (Method m : uriCheckerCls.getDeclaredMethods()) {
                             if (m.getName().equals(name) && m.getReturnType() == boolean.class) {
                                 hook(m).intercept(chain -> {
@@ -160,26 +155,81 @@ public class MainHook extends XposedModule {
                 Object result = chain.proceed();
                 final Context context = (Context) chain.getThisObject();
                 
-                BroadcastReceiver restartReceiver = new BroadcastReceiver() {
+                BroadcastReceiver receiver = new BroadcastReceiver() {
                     @Override
                     public void onReceive(Context context, Intent intent) {
-                        log(4, TAG, "Suicide broadcast received. Killing " + Process.myPid());
-                        Process.killProcess(Process.myPid());
-                        System.exit(0);
+                        String action = intent.getAction();
+                        if (ACTION_RESTART.equals(action)) {
+                            doSuicide();
+                        } else if (ACTION_CLEAR_CLOUD.equals(action)) {
+                            log(4, TAG, "Clearing cloud config files...");
+                            clearCloudFiles(context);
+                            doSuicide();
+                        }
                     }
                 };
                 
-                IntentFilter filter = new IntentFilter(ACTION_RESTART);
+                IntentFilter filter = new IntentFilter();
+                filter.addAction(ACTION_RESTART);
+                filter.addAction(ACTION_CLEAR_CLOUD);
                 if (Build.VERSION.SDK_INT >= 34) {
-                    context.registerReceiver(restartReceiver, filter, Context.RECEIVER_EXPORTED);
+                    context.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED);
                 } else {
-                    context.registerReceiver(restartReceiver, filter);
+                    // 低版本系统使用显式 exported 标志
+                    context.registerReceiver(receiver, filter);
                 }
                 return result;
             });
         } catch (Exception e) {
             log(6, TAG, "Failed to hook restart logic: " + e.getMessage());
         }
+    }
+
+    private void doSuicide() {
+        log(4, TAG, "Suicide initiated. Killing " + Process.myPid());
+        Process.killProcess(Process.myPid());
+        System.exit(0);
+    }
+
+    private void clearCloudFiles(Context context) {
+        try {
+            // 1. 清理 files 目录下的配置
+            File filesDir = context.getFilesDir();
+            String[] configPaths = {"probe", "config", "strategy", "mmkv"};
+            for (String path : configPaths) {
+                deleteDir(new File(filesDir, path));
+            }
+            
+            // 2. 清理相关 SharedPreferences
+            File spDir = new File(context.getApplicationInfo().dataDir, "shared_prefs");
+            if (spDir.exists()) {
+                File[] files = spDir.listFiles();
+                if (files != null) {
+                    for (File f : files) {
+                        String name = f.getName();
+                        if (name.contains("config") || name.contains("strategy") || name.contains("cloud")) {
+                            boolean deleted = f.delete();
+                            if (!deleted) log(4, TAG, "Could not delete: " + name);
+                        }
+                    }
+                }
+            }
+            log(4, TAG, "Cloud config cleanup finished.");
+        } catch (Exception e) {
+            log(6, TAG, "Cleanup error: " + e.getMessage());
+        }
+    }
+
+    private void deleteDir(File file) {
+        if (file == null || !file.exists()) return;
+        if (file.isDirectory()) {
+            File[] files = file.listFiles();
+            if (files != null) {
+                for (File f : files) deleteDir(f);
+            }
+        }
+        boolean deleted = file.delete();
+        if (!deleted) log(4, TAG, "Could not delete file/dir: " + file.getName());
     }
 
     private void hookTeenagerMode(ClassLoader classLoader) {
