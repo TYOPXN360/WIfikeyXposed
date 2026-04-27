@@ -2,6 +2,7 @@ package com.ty.wifikeyxposed
 
 import android.content.SharedPreferences
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -34,11 +35,9 @@ class SettingsActivity : ComponentActivity(), XposedServiceHelper.OnServiceListe
         DynamicColors.applyToActivityIfAvailable(this)
         enableEdgeToEdge()
         
-        // 使用 XposedServiceHelper 绑定服务
         try {
             XposedServiceHelper.registerListener(this)
         } catch (e: Exception) {
-            // 回退逻辑：如果不在 Xposed 环境，尝试使用本地 SP (仅用于预览或测试)
             isServiceBound = true
             remotePrefs = getSharedPreferences("settings", MODE_PRIVATE)
         }
@@ -53,7 +52,6 @@ class SettingsActivity : ComponentActivity(), XposedServiceHelper.OnServiceListe
                             CircularProgressIndicator()
                             Spacer(modifier = Modifier.height(16.dp))
                             Text("正在连接 LSPosed 服务...", fontSize = 14.sp)
-                            Text("请确保模块已在 LSPosed 中启用并重启", fontSize = 12.sp, color = MaterialTheme.colorScheme.secondary)
                         }
                     }
                 }
@@ -62,7 +60,6 @@ class SettingsActivity : ComponentActivity(), XposedServiceHelper.OnServiceListe
     }
 
     override fun onServiceBind(service: XposedService) {
-        // 获取远程偏好设置，文件名为 "settings"
         remotePrefs = service.getRemotePreferences("settings")
         isServiceBound = true
     }
@@ -94,12 +91,16 @@ fun AppTheme(content: @Composable () -> Unit) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
-    // 默认值全部设为 false，确保同步逻辑严谨
+    val context = LocalContext.current
+    
+    // 状态管理
     var blockNews by remember { mutableStateOf(prefs.getBoolean("block_news", false)) }
     var unlockVip by remember { mutableStateOf(prefs.getBoolean("unlock_vip", false)) }
     var deepCleanVip by remember { mutableStateOf(prefs.getBoolean("deep_clean_vip", false)) }
     var removeAds by remember { mutableStateOf(prefs.getBoolean("remove_ads", false)) }
     var liteTeenager by remember { mutableStateOf(prefs.getBoolean("lite_teenager", false)) }
+
+    val allSelected = blockNews && unlockVip && deepCleanVip && removeAds && liteTeenager
 
     Scaffold(
         topBar = {
@@ -108,6 +109,26 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    TextButton(onClick = {
+                        val target = !allSelected
+                        blockNews = target
+                        unlockVip = target
+                        deepCleanVip = target
+                        removeAds = target
+                        liteTeenager = target
+                        prefs.edit().run {
+                            putBoolean("block_news", target)
+                            putBoolean("unlock_vip", target)
+                            putBoolean("deep_clean_vip", target)
+                            putBoolean("remove_ads", target)
+                            putBoolean("lite_teenager", target)
+                            apply()
+                        }
+                    }) {
+                        Text(if (allSelected) "取消全选" else "全选")
                     }
                 }
             )
@@ -188,6 +209,50 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                     )
                 }
             }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Button(
+                onClick = {
+                    try {
+                        val packageName = "com.snda.wifilocating"
+                        // 尝试使用 root 强杀并重启 (大多数 Xposed 用户都有 root)
+                        val process = Runtime.getRuntime().exec("su")
+                        val os = process.outputStream
+                        os.write("am force-stop $packageName\n".toByteArray())
+                        os.write("monkey -p $packageName -c android.intent.category.LAUNCHER 1\n".toByteArray())
+                        os.flush()
+                        os.close()
+                        Toast.makeText(context, "正在尝试重启应用...", Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) {
+                        // 如果没有 root，回退到普通启动 (至少能打开应用)
+                        try {
+                            val intent = context.packageManager.getLaunchIntentForPackage("com.snda.wifilocating")
+                            if (intent != null) {
+                                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                context.startActivity(intent)
+                                Toast.makeText(context, "Root 权限缺失，已尝试普通启动", Toast.LENGTH_LONG).show()
+                            }
+                        } catch (e2: Exception) {
+                            Toast.makeText(context, "操作失败: " + e2.message, Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.extraLarge,
+                contentPadding = PaddingValues(16.dp)
+            ) {
+                Icon(Icons.Default.Refresh, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("保存并重启 WiFi 万能钥匙", fontWeight = FontWeight.Bold)
+            }
+            
+            Text(
+                "提示：重启操作需要 Root 权限以实现完全强杀",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.secondary,
+                modifier = Modifier.padding(top = 8.dp, start = 16.dp)
+            )
         }
     }
 }
