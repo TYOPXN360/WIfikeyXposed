@@ -6,3 +6,4 @@ version=1.0
 versionCode=1
 minApiVersion=101
 targetApiVersion=101
+staticScope=true
