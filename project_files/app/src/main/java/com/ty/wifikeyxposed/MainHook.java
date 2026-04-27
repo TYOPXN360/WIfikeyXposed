@@ -1,5 +1,14 @@
 package com.ty.wifikeyxposed;
 
+/*
+ * 用户需求核心摘要 (CONTEXT RESTORE):
+ * 1. 目标应用：WiFi万能钥匙 5.2.13 (com.snda.wifilocating)
+ * 2. 核心功能：本地 SVIP 永久解锁、全模块去广告 (开屏/列表/视频)、MD3E 设置界面。
+ * 3. 验证流程：每次更改后构建 APK，通过 ADB 安装，重启目标应用，查看 LSPosed 日志。
+ * 4. 强制要求：所有更改必须进行 Git Commit。
+ * 5. 日志查看方法：adb logcat -s LSPosed LSPosed-Bridge WiFiKeyXposed
+ */
+
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
