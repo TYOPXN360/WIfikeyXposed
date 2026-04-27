@@ -99,6 +99,7 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
     var unlockVip by remember { mutableStateOf(prefs.getBoolean("unlock_vip", false)) }
     var deepCleanVip by remember { mutableStateOf(prefs.getBoolean("deep_clean_vip", false)) }
     var removeAds by remember { mutableStateOf(prefs.getBoolean("remove_ads", false)) }
+    var liteTeenager by remember { mutableStateOf(prefs.getBoolean("lite_teenager", false)) }
 
     Scaffold(
         topBar = {
@@ -172,6 +173,17 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                         onCheckedChange = {
                             removeAds = it
                             prefs.edit().putBoolean("remove_ads", it).apply()
+                        }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "精简版青少年模式",
+                        subtitle = "利用内置拦截实现净化，无需密码且无时长限制",
+                        icon = Icons.Default.ChildCare,
+                        checked = liteTeenager,
+                        onCheckedChange = {
+                            liteTeenager = it
+                            prefs.edit().putBoolean("lite_teenager", it).apply()
                         }
                     )
                 }
