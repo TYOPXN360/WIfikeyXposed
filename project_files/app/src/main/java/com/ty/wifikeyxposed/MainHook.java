@@ -1,0 +1,380 @@
+package com.ty.wifikeyxposed;
+
+import android.content.ComponentName;
+import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.view.View;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+
+import androidx.annotation.NonNull;
+
+import io.github.libxposed.api.XposedInterface;
+import io.github.libxposed.api.XposedModule;
+
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.util.concurrent.atomic.AtomicInteger;
+
+public class MainHook extends XposedModule {
+    private static final String TAG \u003d "WiFiKeyXposed";
+    private static final String TARGET_PACKAGE \u003d "com.snda.wifilocating";
+    private static final String ME_FRAGMENT_CLASS \u003d "com.wifitutu.ui.me.MeFragment";
+    
+    private final AtomicInteger hitCount \u003d new AtomicInteger(0);
+
+    public MainHook() {
+        super();
+    }
+
+    @Override
+    public void onPackageReady(@NonNull PackageReadyParam param) {
+        super.onPackageReady(param);
+        if (!param.getPackageName().equals(TARGET_PACKAGE)) {
+            return;
+        }
+
+        boolean vipEnabled \u003d isUnlockVipEnabled();
+        log(4, TAG, "Hooking into: " + param.getPackageName() + " (VIP: " + vipEnabled + ")");
+
+        ClassLoader classLoader \u003d param.getClassLoader();
+        
+        try {
+            hookMeFragment(classLoader);
+            hookPushNotifications(classLoader);
+            hookVipStatus(classLoader, vipEnabled);
+            hookStorage(classLoader, vipEnabled);
+            hookCommonFlags(classLoader, vipEnabled);
+        } catch (Throwable e) {
+            log(6, TAG, "Initialization error: " + e.getMessage());
+        }
+    }
+
+    private void hookMeFragment(ClassLoader classLoader) {
+        try {
+            Class<?> meFragmentClass \u003d classLoader.loadClass(ME_FRAGMENT_CLASS);
+            Method a2Method \u003d meFragmentClass.getDeclaredMethod("a2");
+            a2Method.setAccessible(true);
+
+            hook(a2Method).intercept(new XposedInterface.Hooker() {
+                @Override
+                public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable {
+                    Object result \u003d chain.proceed();
+                    final Object meFragment \u003d chain.getThisObject();
+                    try {
+                        injectCustomSettings(meFragment);
+                    } catch (Exception ignored) {}
+                    return result;
+                }
+            });
+        } catch (Exception ignored) {}
+    }
+
+    private void injectCustomSettings(final Object meFragment) throws Exception {
+        Object binding \u003d findBindingField(meFragment);
+        if (binding \u003d\u003d null) return;
+
+        View anchor \u003d getFieldSafe(binding, "aboutUs");
+        if (anchor \u003d\u003d null) anchor \u003d getFieldSafe(binding, "checkUpdate");
+
+        if (anchor !\u003d null) {
+            final View finalAnchor \u003d anchor;
+            anchor.post(() -\u003e {
+                try {
+                    performInjection(finalAnchor);
+                } catch (Exception ignored) {}
+            });
+        }
+    }
+
+    private void performInjection(View anchor) {
+        final Context context \u003d anchor.getContext();
+        View parentView \u003d (View) anchor.getParent();
+        
+        if (!(parentView instanceof LinearLayout)) {
+            if (parentView !\u003d null \u0026\u0026 parentView.getParent() instanceof LinearLayout) {
+                anchor \u003d parentView;
+                parentView \u003d (View) anchor.getParent();
+            } else {
+                return;
+            }
+        }
+
+        LinearLayout parent \u003d (LinearLayout) parentView;
+        if (parent.findViewWithTag("wifikey_xposed_entry") !\u003d null) return;
+
+        TextView customSetting \u003d new TextView(context);
+        customSetting.setTag("wifikey_xposed_entry");
+        customSetting.setText("Wifi万能钥匙增强");
+        customSetting.setTextSize(16);
+        customSetting.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        
+        if (anchor instanceof TextView) {
+            customSetting.setTextColor(((TextView) anchor).getTextColors());
+            customSetting.setPadding(anchor.getPaddingLeft(), anchor.getPaddingTop(), anchor.getPaddingRight(), anchor.getPaddingBottom());
+        } else {
+            int p \u003d (int) (16 * context.getResources().getDisplayMetrics().density);
+            customSetting.setPadding(p, p, p, p);
+        }
+        
+        customSetting.setLayoutParams(anchor.getLayoutParams());
+        customSetting.setOnClickListener(v -\u003e {
+            Intent intent \u003d new Intent();
+            intent.setComponent(new ComponentName("com.ty.wifikeyxposed", "com.ty.wifikeyxposed.SettingsActivity"));
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(intent);
+        });
+
+        int index \u003d parent.indexOfChild(anchor);
+        parent.addView(customSetting, index + 1);
+        
+        View divider \u003d new View(context);
+        divider.setBackgroundColor(Color.parseColor("#EEEEEE"));
+        parent.addView(divider, index + 1, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 2));
+    }
+
+    private void hookVipStatus(final ClassLoader classLoader, final boolean enabled) {
+        if (!enabled) return;
+        
+        final XposedInterface.Hooker vipMethodHooker \u003d new XposedInterface.Hooker() {
+            @Override
+            public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable {
+                Method m \u003d (Method) chain.getExecutable();
+                Class<?> returnType \u003d m.getReturnType();
+                String name \u003d m.getName();
+                
+                if (m.getParameterCount() \u003d\u003d 0) {
+                    // 1. 处理整数 (等级/状态)
+                    if (returnType \u003d\u003d int.class || returnType \u003d\u003d Integer.class) {
+                        if (name.equals("getIndex")) return chain.proceed();
+                        return 2; 
+                    }
+                    // 2. 处理布尔值
+                    if (returnType \u003d\u003d boolean.class || returnType \u003d\u003d Boolean.class) {
+                        if (name.equals("Ao")) return false; // isAnonymous -\u003e false
+                        if (name.equals("I2")) return true;  // isLogined -\u003e true
+                        if (name.toLowerCase().contains("expired") || name.equals("n")) return false;
+                        return true;
+                    }
+                    // 3. 处理长整型 (时间)
+                    if (returnType \u003d\u003d long.class || returnType \u003d\u003d Long.class) {
+                        if (name.toLowerCase().contains("date") || name.toLowerCase().contains("expire") || name.toLowerCase().contains("time")) {
+                            return 2082729600000L;
+                        }
+                        return chain.proceed();
+                    }
+                    // 4. 处理枚举
+                    if (returnType.isEnum()) {
+                        String typeName \u003d returnType.getName();
+                        try {
+                            if (typeName.endsWith(".n7") || typeName.equals("g50.g")) {
+                                return Enum.valueOf((Class\u003cEnum\u003e) returnType, "SVIP");
+                            } else if (typeName.endsWith(".VIP_CATEGORY") || typeName.endsWith(".MOVIE_VIP_CATEGORY")) {
+                                return Enum.valueOf((Class\u003cEnum\u003e) returnType, "YEAR");
+                            }
+                        } catch (Exception ignored) {}
+                    }
+                }
+                return chain.proceed();
+            }
+        };
+
+        final XposedInterface.Hooker vipConstructorHooker \u003d new XposedInterface.Hooker() {
+            @Override
+            public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable {
+                Object result \u003d chain.proceed();
+                Object obj \u003d chain.getThisObject();
+                if (obj \u003d\u003d null) return result;
+                
+                Class<?> curr \u003d obj.getClass();
+                while (curr !\u003d null \u0026\u0026 !curr.getName().equals("java.lang.Object")) {
+                    for (Field f : curr.getDeclaredFields()) {
+                        try {
+                            String name \u003d f.getName().toLowerCase();
+                            f.setAccessible(true);
+                            Class<?> type \u003d f.getType();
+                            if (name.contains("vip") || name.contains("svip")) {
+                                if (type \u003d\u003d int.class || type \u003d\u003d Integer.class) f.set(obj, 2);
+                                else if (type \u003d\u003d boolean.class || type \u003d\u003d Boolean.class) f.set(obj, true);
+                                else if (type \u003d\u003d long.class || type \u003d\u003d Long.class) f.set(obj, 2082729600000L);
+                            } else if (name.contains("expired")) {
+                                if (type \u003d\u003d boolean.class || type \u003d\u003d Boolean.class) f.set(obj, false);
+                            }
+                        } catch (Exception ignored) {}
+                    }
+                    curr \u003d curr.getSuperclass();
+                }
+                return result;
+            }
+        };
+
+        String[] vipClasses \u003d {
+            "py.a", "py.b", "w40.f", "w40.g", "j50.a", "j50.b", "ly.b", "i50.g", "l5",
+            "com.wifitutu.link.foundation.native_.model.generate.vip.BridgeUserVipInfo",
+            "mz.f", "i50.d", "i50.e", "i50.b", "i50.l", "m50.g", "ry.b", "fz.m2", "g50.w", "m50.i",
+            "com.wifitutu.movie.core.utils.a", "com.wifitutu.link.foundation.sdk.k1",
+            "com.wifitutu.link.foundation.sdk.i1", "com.wifitutu.user.imp.j", "com.wifitutu.widget.core.j",
+            "com.wifitutu.widget.core.k9", "com.wifitutu.link.foundation.core.k0",
+            "com.wifitutu.link.foundation.react_native.core.VipItemInfo",
+            "com.wifitutu.link.foundation.webengine.plugin.VipItemInfo",
+            "com.wifitutu.link.foundation.native_.model.generate.user.BridgeUserInfo"
+        };
+        
+        for (String clsName : vipClasses) {
+            try {
+                Class<?> clazz \u003d classLoader.loadClass(clsName);
+                for (Method m : clazz.getDeclaredMethods()) {
+                    if (!m.isSynthetic() \u0026\u0026 !m.getName().equals("toString")) {
+                        hook(m).intercept(vipMethodHooker);
+                    }
+                }
+                for (Constructor<?> c : clazz.getDeclaredConstructors()) {
+                    hook(c).intercept(vipConstructorHooker);
+                }
+            } catch (Throwable ignored) {}
+        }
+
+        // j5 helpers
+        try {
+            Class<?> j5Class \u003d classLoader.loadClass("com.wifitutu.link.foundation.core.j5");
+            for (Method m : j5Class.getDeclaredMethods()) {
+                if (Modifier.isStatic(m.getModifiers()) \u0026\u0026 (m.getReturnType() \u003d\u003d boolean.class || m.getReturnType() \u003d\u003d Boolean.class)) {
+                    hook(m).intercept(new XposedInterface.Hooker() {
+                        @Override
+                        public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable {
+                            String name \u003d chain.getExecutable().getName();
+                            if (name.equals("c") || name.equals("d")) return true; // isSVIP / isVIP
+                            return chain.proceed();
+                        }
+                    });
+                }
+            }
+        } catch (Throwable ignored) {}
+    }
+
+    private void hookStorage(ClassLoader classLoader, boolean enabled) {
+        if (!enabled) return;
+        
+        XposedInterface.Hooker storageHooker \u003d new XposedInterface.Hooker() {
+            @Override
+            public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable {
+                String key \u003d (String) chain.getArgs().get(0);
+                if (key \u003d\u003d null) return chain.proceed();
+                String lowerKey \u003d key.toLowerCase();
+                String methodName \u003d chain.getExecutable().getName();
+                if (lowerKey.contains("vip") || lowerKey.contains("svip")) {
+                    if (methodName.equals("getBool")) return true;
+                    if (methodName.equals("getInt")) return 2;
+                    if (methodName.equals("getLong")) return 2082729600000L;
+                    if (methodName.equals("getString")) return "2";
+                }
+                return chain.proceed();
+            }
+        };
+
+        String[] storageClasses \u003d {
+            "com.wifitutu.link.foundation.sdk.z0",
+            "com.wifitutu.link.foundation.sdk.feature.l",
+            "com.wifitutu.widget.feature.u"
+        };
+
+        for (String cls : storageClasses) {
+            try {
+                Class<?> clazz \u003d classLoader.loadClass(cls);
+                for (Method m : clazz.getDeclaredMethods()) {
+                    if (m.getName().startsWith("get") \u0026\u0026 m.getParameterCount() \u003e 0 \u0026\u0026 m.getParameterTypes()[0] \u003d\u003d String.class) {
+                        hook(m).intercept(storageHooker);
+                    }
+                }
+            } catch (Throwable ignored) {}
+        }
+    }
+
+    private void hookCommonFlags(ClassLoader classLoader, boolean enabled) {
+        if (!enabled) return;
+        try {
+            Class<?> aClass \u003d classLoader.loadClass("com.wifitutu.movie.core.utils.a");
+            for (Method m : aClass.getDeclaredMethods()) {
+                if (m.getReturnType() \u003d\u003d boolean.class \u0026\u0026 m.getParameterCount() \u003d\u003d 0) {
+                    hook(m).intercept(new XposedInterface.Hooker() {
+                        @Override
+                        public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable {
+                            String name \u003d chain.getExecutable().getName();
+                            if (name.equals("j") || name.equals("i")) return true; // isVip / isSVip
+                            return chain.proceed();
+                        }
+                    });
+                }
+            }
+        } catch (Throwable ignored) {}
+    }
+
+    private void hookPushNotifications(ClassLoader classLoader) {
+        try {
+            Class<?> pushHelperClass \u003d classLoader.loadClass("com.wifitutu.wakeup.imp.malawi.push.a");
+            Class<?> mwTaskModelClass \u003d classLoader.loadClass("com.wifitutu.wakeup.imp.malawi.strategy.bean.MwTaskModel");
+            Method vMethod \u003d pushHelperClass.getDeclaredMethod("v", mwTaskModelClass);
+
+            hook(vMethod).intercept(new XposedInterface.Hooker() {
+                @Override
+                public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable {
+                    if (isBlockNewsEnabled()) return null;
+                    return chain.proceed();
+                }
+            });
+        } catch (Exception ignored) {}
+    }
+
+    private boolean isUnlockVipEnabled() {
+        try {
+            SharedPreferences sp \u003d getRemotePreferences("settings");
+            return sp.getBoolean("unlock_vip", true); 
+        } catch (Exception e) {
+            return true; 
+        }
+    }
+
+    private boolean isBlockNewsEnabled() {
+        try {
+            return getRemotePreferences("settings").getBoolean("block_news", false);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private View getFieldSafe(Object obj, String name) {
+        try {
+            Field f \u003d obj.getClass().getField(name);
+            return (View) f.get(obj);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private Object findBindingField(Object obj) {
+        Class<?> curr \u003d obj.getClass();
+        while (curr !\u003d null \u0026\u0026 !curr.getName().equals("java.lang.Object")) {
+            try {
+                Field f \u003d curr.getDeclaredField("binding");
+                f.setAccessible(true);
+                return f.get(obj);
+            } catch (Exception ignored) {}
+            for (Field f : curr.getDeclaredFields()) {
+                if (f.getType().getName().endsWith("Binding")) {
+                    try {
+                        f.setAccessible(true);
+                        Object val \u003d f.get(obj);
+                        if (val !\u003d null) return val;
+                    } catch (Exception ignored) {}
+                }
+            }
+            curr \u003d curr.getSuperclass();
+        }
+        return null;
+    }
+}

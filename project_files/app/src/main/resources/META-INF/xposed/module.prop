@@ -1,0 +1,8 @@
+name=WiFiKeyXposed
+id=com.ty.wifikeyxposed
+author=ty
+description=WiFi万能钥匙自定义设置模块
+version=1.0
+versionCode=1
+minApiVersion=101
+targetApiVersion=101

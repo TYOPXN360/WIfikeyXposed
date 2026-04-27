@@ -1,0 +1,12 @@
+<resources>
+    <style name="Theme.WIfikeyXposed" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Dark Theme Colors -->
+        <item name="colorPrimary">#D1E4FF</item>
+        <item name="colorOnPrimary">#003258</item>
+        <item name="colorContainer">#00497D</item>
+        <item name="colorOnContainer">#D1E4FF</item>
+        <item name="android:windowBackground">#1A1C1E</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
