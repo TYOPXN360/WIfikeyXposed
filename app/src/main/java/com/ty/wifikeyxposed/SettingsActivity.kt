@@ -221,6 +221,26 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                             prefs.edit().putBoolean("remove_cloud_control", it).apply()
                         }
                     )
+                    
+                    if (removeCloudControl) {
+                        Box(modifier = Modifier.padding(start = 56.dp, bottom = 8.dp, end = 16.dp)) {
+                            TextButton(
+                                onClick = {
+                                    val packageName = "com.snda.wifilocating"
+                                    val clearAction = "com.ty.wifikeyxposed.ACTION_CLEAR_CLOUD"
+                                    val intent = Intent(clearAction).apply { setPackage(packageName) }
+                                    context.sendBroadcast(intent)
+                                    Toast.makeText(context, "云控配置已清除", Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                            ) {
+                                Icon(Icons.Default.DeleteSweep, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("立即清除已有的云控配置缓存", fontSize = 13.sp)
+                            }
+                        }
+                    }
                 }
             }
 
@@ -270,28 +290,6 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                 color = MaterialTheme.colorScheme.secondary,
                 modifier = Modifier.padding(top = 8.dp, start = 16.dp)
             )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            OutlinedButton(
-                onClick = {
-                    val packageName = "com.snda.wifilocating"
-                    val clearAction = "com.ty.wifikeyxposed.ACTION_CLEAR_CLOUD"
-                    
-                    val intent = Intent(clearAction).apply {
-                        setPackage(packageName)
-                    }
-                    context.sendBroadcast(intent)
-                    Toast.makeText(context, "正在清理云控缓存并重启...", Toast.LENGTH_SHORT).show()
-                },
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.extraLarge,
-                contentPadding = PaddingValues(16.dp)
-            ) {
-                Icon(Icons.Default.DeleteSweep, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("清除云控缓存并重启", fontWeight = FontWeight.Bold)
-            }
         }
     }
 }

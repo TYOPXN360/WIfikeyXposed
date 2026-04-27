@@ -162,9 +162,8 @@ public class MainHook extends XposedModule {
                         if (ACTION_RESTART.equals(action)) {
                             doSuicide();
                         } else if (ACTION_CLEAR_CLOUD.equals(action)) {
-                            log(4, TAG, "Clearing cloud config files...");
+                            log(4, TAG, "Clearing cloud config files (no auto-restart)...");
                             clearCloudFiles(context);
-                            doSuicide();
                         }
                     }
                 };
