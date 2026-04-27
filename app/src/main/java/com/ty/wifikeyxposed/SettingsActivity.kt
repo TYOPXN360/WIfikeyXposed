@@ -1,5 +1,7 @@
 package com.ty.wifikeyxposed
 
+import android.content.ComponentName
+import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Bundle
 import android.widget.Toast
@@ -215,16 +217,31 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
             Button(
                 onClick = {
                     val packageName = "com.snda.wifilocating"
+                    val mainActivity = "com.wifitutu.ui.launcher.LauncherActivity"
                     val restartAction = "com.ty.wifikeyxposed.ACTION_RESTART"
                     
-                    // 1. 发送免 Root 重启广播
-                    // 注意：现在逻辑改为目标应用收到广播后，自己预约 REVIVAL 并自杀
-                    val intent = android.content.Intent(restartAction).apply {
+                    // 1. 发送免 Root 自杀广播
+                    val intent = Intent(restartAction).apply {
                         setPackage(packageName)
                     }
                     context.sendBroadcast(intent)
                     
-                    Toast.makeText(context, "正在发起自愈式重启...", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "正在发起免 Root 重启...", Toast.LENGTH_SHORT).show()
+                    
+                    // 2. 延迟 1.5 秒后，通过显式类名直接拉起
+                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                        try {
+                            val launchIntent = Intent().apply {
+                                component = ComponentName(packageName, mainActivity)
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+                            }
+                            context.startActivity(launchIntent)
+                        } catch (e: Exception) {
+                            // 回退到常规启动
+                            val fallback = context.packageManager.getLaunchIntentForPackage(packageName)
+                            fallback?.let { context.startActivity(it) }
+                        }
+                    }, 1500)
                 },
                 modifier = Modifier.fillMaxWidth(),
                 shape = MaterialTheme.shapes.extraLarge,
@@ -232,11 +249,11 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
             ) {
                 Icon(Icons.Default.Bolt, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("自愈式免 Root 极速重启", fontWeight = FontWeight.Bold)
+                Text("免 Root 强力重启应用", fontWeight = FontWeight.Bold)
             }
             
             Text(
-                "提示：利用目标应用自身的临终预约机制实现 100% 自动拉起",
+                "提示：利用显式 Intent 直连主入口，实现最高拉起成功率",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.secondary,
                 modifier = Modifier.padding(top = 8.dp, start = 16.dp)

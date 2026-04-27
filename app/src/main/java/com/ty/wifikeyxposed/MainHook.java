@@ -5,15 +5,13 @@ package com.ty.wifikeyxposed;
  * 1. 目标应用：WiFi万能钥匙 5.2.13 (com.snda.wifilocating)
  * 2. 核心功能：本地 SVIP 永久解锁、全模块去广告 (开屏/列表/视频)、MD3E 设置界面。
  * 3. 创新功能：精简版青少年模式。利用内置拦截实现净化，剥离密码与时长限制。
- * 4. 交互增强：实现“自愈式”免 Root 重启机制。
+ * 4. 交互增强：实现稳定版免 Root 重启机制。
  * 5. 验证流程：每次更改后构建 APK，通过 ADB 安装，重启目标应用，查看 LSPosed 日志。
  * 6. 强制要求：所有更改必须进行 Git Commit。
  * 7. 行为规范：思考必须是中文，交流必须是中文。
  * 8. API 规范：100% 符合 libxposed API 101 规范。
  */
 
-import android.app.AlarmManager;
-import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
@@ -95,8 +93,8 @@ public class MainHook extends XposedModule {
     }
 
     /**
-     * 实现“自愈式”免 Root 重启
-     * 原理：应用在自杀前，自己向系统预约一个 1 秒后的拉起闹钟。
+     * 实现纯净的自杀逻辑
+     * 收到广播后立即终止当前进程及其所有加载了模块的子进程
      */
     private void hookRestartLogic(ClassLoader classLoader) {
         try {
@@ -110,34 +108,7 @@ public class MainHook extends XposedModule {
                 BroadcastReceiver restartReceiver = new BroadcastReceiver() {
                     @Override
                     public void onReceive(Context context, Intent intent) {
-                        log(4, TAG, "Received restart broadcast. Scheduling revival...");
-                        
-                        try {
-                            // 1. 获取自身的启动 Intent
-                            Intent launchIntent = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
-                            if (launchIntent != null) {
-                                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-                                
-                                // 2. 封装成 PendingIntent
-                                PendingIntent pi = PendingIntent.getActivity(
-                                    context, 
-                                    1234, 
-                                    launchIntent, 
-                                    PendingIntent.FLAG_CANCEL_CURRENT | PendingIntent.FLAG_IMMUTABLE
-                                );
-                                
-                                // 3. 预约 1 秒后由系统拉起
-                                AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
-                                if (am != null) {
-                                    am.set(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + 1000, pi);
-                                }
-                            }
-                        } catch (Exception e) {
-                            log(6, TAG, "Revival schedule failed: " + e.getMessage());
-                        }
-
-                        // 4. 立即自杀
-                        log(4, TAG, "Terminating process " + Process.myPid());
+                        log(4, TAG, "Suicide broadcast received. Killing " + Process.myPid());
                         Process.killProcess(Process.myPid());
                         System.exit(0);
                     }
