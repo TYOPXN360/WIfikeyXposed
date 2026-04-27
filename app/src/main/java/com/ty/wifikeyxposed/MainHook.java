@@ -4,8 +4,8 @@ package com.ty.wifikeyxposed;
  * 用户需求核心摘要 (CONTEXT RESTORE):
  * 1. 目标应用：WiFi万能钥匙 5.2.13 (com.snda.wifilocating)
  * 2. 核心功能：本地 SVIP 永久解锁、全模块去广告 (开屏/列表/视频)、MD3E 设置界面。
- * 3. 创新功能：精简版青少年模式、去除云控系统、一键清除云控缓存。
- * 4. 交互增强：实现稳定版免 Root 重启机制。
+ * 3. 创新功能：精简版青少年模式、去除云控系统、一键清除云控缓存、底栏极致精简。
+ * 4. 交互增强：实现稳定版免 Root 重启机制、高风险操作倒计时二次确认。
  * 5. 验证流程：每次更改后构建 APK，通过 ADB 安装，重启目标应用，查看 LSPosed 日志。
  * 6. 强制要求：所有更改必须进行 Git Commit。
  * 7. 行为规范：思考必须是中文，交流必须是中文。
@@ -93,14 +93,93 @@ public class MainHook extends XposedModule {
             hookAds(classLoader);
             hookTeenagerMode(classLoader);
             hookCloudControl(classLoader);
+            hookBottomNavigation(classLoader);
         } catch (Throwable e) {
             log(6, TAG, "Initialization error: " + e.getMessage());
         }
     }
 
+    /**
+     * 实现底栏精简功能
+     * 1. Hook 所有 View.setVisibility，如果是底栏按钮且配置为隐藏，则强制保持 GONE
+     * 2. 在 MainActivity 生命周期中主动刷新一次状态
+     */
+    private void hookBottomNavigation(ClassLoader classLoader) {
+        try {
+            Class<?> viewCls = classLoader.loadClass("android.view.View");
+            Method setVisibilityMethod = viewCls.getMethod("setVisibility", int.class);
+
+            hook(setVisibilityMethod).intercept(chain -> {
+                View view = (View) chain.getThisObject();
+                int id = view.getId();
+                if (id == View.NO_ID) return chain.proceed();
+
+                // 如果该 ID 属于我们想要隐藏的底栏项，且当前尝试设为 VISIBLE
+                int visibility = (int) chain.getArgs().get(0);
+                if (visibility == View.VISIBLE && shouldHideTab(view, id)) {
+                    return null; // 拦截，保持 GONE
+                }
+                return chain.proceed();
+            });
+
+            // 针对 MainActivity 生命周期执行主动隐藏
+            try {
+                Class<?> mainActivityCls = classLoader.loadClass("com.wifitutu.ui.main.MainActivity");
+                Method onResumeMethod = mainActivityCls.getDeclaredMethod("onResume");
+                hook(onResumeMethod).intercept(chain -> {
+                    Object result = chain.proceed();
+                    mainHandler.postDelayed(() -> refreshBottomTabs(chain.getThisObject()), 500);
+                    return result;
+                });
+            } catch (Exception ignored) {}
+
+        } catch (Exception e) {
+            log(6, TAG, "Failed to hook BottomNavigation: " + e.getMessage());
+        }
+    }
+
+    private boolean shouldHideTab(View v, int id) {
+        try {
+            // 通过资源名匹配，防止动态 ID 漂移
+            String name = v.getResources().getResourceEntryName(id);
+            if (name == null) return false;
+            
+            if ("navigation_home".equals(name)) return isFeatureEnabled("hide_tab_home", false);
+            if ("navigation_nearby".equals(name)) return isFeatureEnabled("hide_tab_nearby", false);
+            if ("navigation_video".equals(name)) return isFeatureEnabled("hide_tab_video", false);
+            if ("navigation_welfare".equals(name)) return isFeatureEnabled("hide_tab_welfare", false);
+            if ("navigation_im".equals(name)) return isFeatureEnabled("hide_tab_im", false);
+            if ("navigation_web".equals(name)) return isFeatureEnabled("hide_tab_web", false);
+            if ("navigation_guard".equals(name)) return isFeatureEnabled("hide_tab_guard", false);
+            if ("navigation_me".equals(name)) return isFeatureEnabled("hide_tab_me", false);
+        } catch (Exception ignored) {}
+        return false;
+    }
+
+    private void refreshBottomTabs(Object mainActivity) {
+        try {
+            android.app.Activity activity = (android.app.Activity) mainActivity;
+            View root = activity.getWindow().getDecorView();
+            String[] tabNames = {
+                "navigation_home", "navigation_nearby", "navigation_video", 
+                "navigation_welfare", "navigation_im", "navigation_web", 
+                "navigation_guard", "navigation_me"
+            };
+            
+            for (String name : tabNames) {
+                int id = activity.getResources().getIdentifier(name, "id", TARGET_PACKAGE);
+                if (id != 0) {
+                    View v = root.findViewById(id);
+                    if (v != null && shouldHideTab(v, id)) {
+                        v.setVisibility(View.GONE);
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+    }
+
     private void hookCloudControl(ClassLoader classLoader) {
         try {
-            // 1. 拦截远程配置接口
             try {
                 Class<?> remoteConfigCls = classLoader.loadClass(REMOTE_CONFIG_INTERFACE);
                 for (Method m : remoteConfigCls.getDeclaredMethods()) {
@@ -113,7 +192,6 @@ public class MainHook extends XposedModule {
                 }
             } catch (Exception ignored) {}
 
-            // 2. 中和广告策略中的太极值
             try {
                 Class<?> adStrategyCls = classLoader.loadClass(AD_STRATEGY_CLASS);
                 Method getTaiChiMethod = adStrategyCls.getDeclaredMethod("getTaiChiValue");
@@ -123,7 +201,6 @@ public class MainHook extends XposedModule {
                 });
             } catch (Exception ignored) {}
 
-            // 3. 绕过 URI 云控拦截
             try {
                 Class<?> uriCheckerCls = classLoader.loadClass(URI_CHECKER_CLASS);
                 String[] checkMethods = {"h", "i", "k", "l", "m"};
@@ -174,7 +251,6 @@ public class MainHook extends XposedModule {
                 if (Build.VERSION.SDK_INT >= 34) {
                     context.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED);
                 } else {
-                    // 低版本系统使用显式 exported 标志
                     context.registerReceiver(receiver, filter);
                 }
                 return result;
@@ -192,14 +268,12 @@ public class MainHook extends XposedModule {
 
     private void clearCloudFiles(Context context) {
         try {
-            // 1. 清理 files 目录下的配置
             File filesDir = context.getFilesDir();
             String[] configPaths = {"probe", "config", "strategy", "mmkv"};
             for (String path : configPaths) {
                 deleteDir(new File(filesDir, path));
             }
             
-            // 2. 清理相关 SharedPreferences
             File spDir = new File(context.getApplicationInfo().dataDir, "shared_prefs");
             if (spDir.exists()) {
                 File[] files = spDir.listFiles();

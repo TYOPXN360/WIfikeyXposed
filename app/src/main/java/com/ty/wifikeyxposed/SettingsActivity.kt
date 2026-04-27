@@ -103,7 +103,23 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
     var liteTeenager by remember { mutableStateOf(prefs.getBoolean("lite_teenager", false)) }
     var removeCloudControl by remember { mutableStateOf(prefs.getBoolean("remove_cloud_control", false)) }
 
-    val allSelected = blockNews && unlockVip && deepCleanVip && removeAds && liteTeenager && removeCloudControl
+    // 底栏精简状态
+    var hideHome by remember { mutableStateOf(prefs.getBoolean("hide_tab_home", false)) }
+    var hideNearby by remember { mutableStateOf(prefs.getBoolean("hide_tab_nearby", false)) }
+    var hideVideo by remember { mutableStateOf(prefs.getBoolean("hide_tab_video", false)) }
+    var hideWelfare by remember { mutableStateOf(prefs.getBoolean("hide_tab_welfare", false)) }
+    var hideIm by remember { mutableStateOf(prefs.getBoolean("hide_tab_im", false)) }
+    var hideWeb by remember { mutableStateOf(prefs.getBoolean("hide_tab_web", false)) }
+    var hideGuard by remember { mutableStateOf(prefs.getBoolean("hide_tab_guard", false)) }
+    var hideMe by remember { mutableStateOf(prefs.getBoolean("hide_tab_me", false)) }
+
+    // 对话框状态
+    var showHomeWarning by remember { mutableStateOf(false) }
+    var showMeWarning by remember { mutableStateOf(false) }
+
+    val allSelected = blockNews && unlockVip && deepCleanVip && removeAds && liteTeenager && removeCloudControl &&
+            hideNearby && hideVideo && hideWelfare && hideIm && hideWeb && hideGuard
+            // 注意：根据要求，全选默认不包含 hideHome 和 hideMe
 
     Scaffold(
         topBar = {
@@ -122,12 +138,29 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                         deepCleanVip = target
                         removeAds = target
                         liteTeenager = target
+                        removeCloudControl = target
+                        
+                        hideNearby = target
+                        hideVideo = target
+                        hideWelfare = target
+                        hideIm = target
+                        hideWeb = target
+                        hideGuard = target
+
                         prefs.edit().run {
                             putBoolean("block_news", target)
                             putBoolean("unlock_vip", target)
                             putBoolean("deep_clean_vip", target)
                             putBoolean("remove_ads", target)
                             putBoolean("lite_teenager", target)
+                            putBoolean("remove_cloud_control", target)
+                            
+                            putBoolean("hide_tab_nearby", target)
+                            putBoolean("hide_tab_video", target)
+                            putBoolean("hide_tab_welfare", target)
+                            putBoolean("hide_tab_im", target)
+                            putBoolean("hide_tab_web", target)
+                            putBoolean("hide_tab_guard", target)
                             apply()
                         }
                     }) {
@@ -248,6 +281,86 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            Text(
+                "精简底栏 (极致净化)",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 8.dp, start = 8.dp)
+            )
+
+            ElevatedCard(
+                shape = MaterialTheme.shapes.extraLarge,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(8.dp)) {
+                    SettingItem(
+                        title = "精简首页 / 连接",
+                        subtitle = "核心功能项，谨慎开启",
+                        icon = Icons.Default.Home,
+                        checked = hideHome,
+                        onCheckedChange = { if (it) showHomeWarning = true else { hideHome = false; prefs.edit().putBoolean("hide_tab_home", false).apply() } }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "精简发现 / 附近",
+                        subtitle = "隐藏社交与周边信息入口",
+                        icon = Icons.Default.Explore,
+                        checked = hideNearby,
+                        onCheckedChange = { hideNearby = it; prefs.edit().putBoolean("hide_tab_nearby", it).apply() }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "精简视频",
+                        subtitle = "隐藏短视频流入口",
+                        icon = Icons.Default.VideoLibrary,
+                        checked = hideVideo,
+                        onCheckedChange = { hideVideo = it; prefs.edit().putBoolean("hide_tab_video", it).apply() }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "精简福利 / 赚钱",
+                        subtitle = "隐藏任务中心与广告任务入口",
+                        icon = Icons.Default.MonetizationOn,
+                        checked = hideWelfare,
+                        onCheckedChange = { hideWelfare = it; prefs.edit().putBoolean("hide_tab_welfare", it).apply() }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "精简消息 / 聊天",
+                        subtitle = "隐藏即时通讯与通知消息入口",
+                        icon = Icons.Default.Message,
+                        checked = hideIm,
+                        onCheckedChange = { hideIm = it; prefs.edit().putBoolean("hide_tab_im", it).apply() }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "精简资讯 / 网页",
+                        subtitle = "隐藏内置新闻浏览器入口",
+                        icon = Icons.Default.Public,
+                        checked = hideWeb,
+                        onCheckedChange = { hideWeb = it; prefs.edit().putBoolean("hide_tab_web", it).apply() }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "精简安全守护",
+                        subtitle = "隐藏检测与安全增强入口",
+                        icon = Icons.Default.Shield,
+                        checked = hideGuard,
+                        onCheckedChange = { hideGuard = it; prefs.edit().putBoolean("hide_tab_guard", it).apply() }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "精简我的",
+                        subtitle = "重要：开启后将失去模块设置入口",
+                        icon = Icons.Default.Person,
+                        checked = hideMe,
+                        onCheckedChange = { if (it) showMeWarning = true else { hideMe = false; prefs.edit().putBoolean("hide_tab_me", false).apply() } }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
             Button(
                 onClick = {
                     val packageName = "com.snda.wifilocating"
@@ -293,6 +406,80 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                 modifier = Modifier.padding(top = 8.dp, start = 16.dp)
             )
         }
+    }
+
+    // 警告对话框：精简首页
+    if (showHomeWarning) {
+        var countdown by remember { mutableIntStateOf(3) }
+        LaunchedEffect(Unit) {
+            while (countdown > 0) {
+                kotlinx.coroutines.delay(1000)
+                countdown--
+            }
+        }
+        AlertDialog(
+            onDismissRequest = { showHomeWarning = false },
+            title = { Text("风险提示") },
+            text = { Text("开启后将可能失去软件主功能，你确定要开启吗？") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        hideHome = true
+                        prefs.edit().putBoolean("hide_tab_home", true).apply()
+                        showHomeWarning = false
+                    },
+                    enabled = countdown == 0,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (countdown == 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = if (countdown == 0) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                ) {
+                    Text(if (countdown > 0) "确定 (${countdown}s)" else "确定")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showHomeWarning = false }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
+    // 警告对话框：精简我的
+    if (showMeWarning) {
+        var countdown by remember { mutableIntStateOf(3) }
+        LaunchedEffect(Unit) {
+            while (countdown > 0) {
+                kotlinx.coroutines.delay(1000)
+                countdown--
+            }
+        }
+        AlertDialog(
+            onDismissRequest = { showMeWarning = false },
+            title = { Text("风险提示") },
+            text = { Text("开启后将失去应用内进入模块的入口，确定要开启吗？") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        hideMe = true
+                        prefs.edit().putBoolean("hide_tab_me", true).apply()
+                        showMeWarning = false
+                    },
+                    enabled = countdown == 0,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (countdown == 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = if (countdown == 0) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                ) {
+                    Text(if (countdown > 0) "确定 (${countdown}s)" else "确定")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showMeWarning = false }) {
+                    Text("取消")
+                }
+            }
+        )
     }
 }
 
