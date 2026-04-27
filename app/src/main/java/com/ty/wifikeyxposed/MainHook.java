@@ -9,6 +9,7 @@ package com.ty.wifikeyxposed;
  * 5. 日志查看方法：adb logcat -s LSPosed LSPosed-Bridge WiFiKeyXposed
  * 6. Java 路径: /media/tyopxn360/Android/MC/Java/Java21
  * 7. 行为规范：思考必须是中文，交流必须是中文。遇到报错先联网搜索方案，不得盲目乱改。
+ * 8. 解锁策略：必须是“解锁会员”而非“删除会员体系”。保留 SVIP 标识，仅隐藏推广横幅。
  */
 
 import android.content.ComponentName;
@@ -113,56 +114,30 @@ public class MainHook extends XposedModule {
             isBlockField.setAccessible(true);
             isBlockField.set(null, true);
         } catch (Exception ignored) {}
-
-        try {
-            // 5. 拦截广告提供商 SDK 初始化 (可选但有效)
-            // 穿山甲 (TikTok/Pangle)
-            Class<?> ttAdSdkClass = classLoader.loadClass("com.bytedance.sdk.openadsdk.TTAdSdk");
-            // 强制 init 返回，或者拦截 getAdManager
-        } catch (Exception ignored) {}
-    }
-
-    private boolean isRemoveAdsEnabled() {
-        try {
-            return getRemotePreferences("settings").getBoolean("remove_ads", true);
-        } catch (Exception e) {
-            return true;
-        }
     }
 
     private void hookMeFragment(ClassLoader classLoader) {
         try {
-            Class<?> meFragmentClass = classLoader.loadClass(ME_FRAGMENT_CLASS);
+            Class<?> meFragmentClass \u003d classLoader.loadClass(ME_FRAGMENT_CLASS);
             
             // 1. Hook a2 to inject settings entry
-            Method a2Method = meFragmentClass.getDeclaredMethod("a2");
+            Method a2Method \u003d meFragmentClass.getDeclaredMethod("a2");
             a2Method.setAccessible(true);
             hook(a2Method).intercept(new XposedInterface.Hooker() {
                 @Override
                 public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable {
-                    Object result = chain.proceed();
+                    Object result \u003d chain.proceed();
                     try { injectCustomSettings(chain.getThisObject()); } catch (Exception ignored) {}
                     return result;
                 }
             });
 
-            // 2. Hook b2 (Vip Widget loader) to suppress banners
-            Method b2Method = meFragmentClass.getDeclaredMethod("b2");
-            b2Method.setAccessible(true);
-            hook(b2Method).intercept(new XposedInterface.Hooker() {
-                @Override
-                public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable {
-                    if (isUnlockVipEnabled()) return null; // Suppress VIP widgets
-                    return chain.proceed();
-                }
-            });
-
-            // 3. Force hide VIP regions in onCreateView or onResume
-            Method onResumeMethod = meFragmentClass.getDeclaredMethod("onResume");
+            // 2. 在 onResume 强制隐藏横幅
+            Method onResumeMethod \u003d meFragmentClass.getDeclaredMethod("onResume");
             hook(onResumeMethod).intercept(new XposedInterface.Hooker() {
                 @Override
                 public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable {
-                    Object result = chain.proceed();
+                    Object result \u003d chain.proceed();
                     if (isUnlockVipEnabled()) {
                         hideVipBanners(chain.getThisObject());
                     }
@@ -174,15 +149,28 @@ public class MainHook extends XposedModule {
 
     private void hideVipBanners(Object meFragment) {
         try {
-            Object binding = findBindingField(meFragment);
-            if (binding == null) return;
+            Object binding \u003d findBindingField(meFragment);
+            if (binding \u003d\u003d null) return;
             
-            String[] regions = {"regionVip", "regionMovieVip", "vipFlag", "vipSepWifiFlag", "vipSepMovieFlag"};
-            for (String name : regions) {
-                View view = getFieldSafe(binding, name);
-                if (view != null) {
-                    log(4, TAG, "Force hiding VIP banner element: " + name);
-                    view.post(() -> view.setVisibility(View.GONE));
+            boolean deepClean \u003d isDeepCleanVipEnabled();
+            
+            // 推广横幅（解锁会员时无论如何都隐藏，因为 SVIP 无需开通）
+            String[] promos \u003d {"regionVip", "regionMovieVip"};
+            for (String name : promos) {
+                View view \u003d getFieldSafe(binding, name);
+                if (view !\u003d null) {
+                    view.post(() -\u003e view.setVisibility(View.GONE));
+                }
+            }
+            
+            // 身份标识（仅在开启极致净化时隐藏）
+            if (deepClean) {
+                String[] flags \u003d {"vipFlag", "vipSepWifiFlag", "vipSepMovieFlag"};
+                for (String name : flags) {
+                    View view \u003d getFieldSafe(binding, name);
+                    if (view !\u003d null) {
+                        view.post(() -\u003e view.setVisibility(View.GONE));
+                    }
                 }
             }
         } catch (Exception ignored) {}
@@ -449,6 +437,22 @@ public class MainHook extends XposedModule {
             return sp.getBoolean("unlock_vip", true); 
         } catch (Exception e) {
             return true; 
+        }
+    }
+
+    private boolean isDeepCleanVipEnabled() {
+        try {
+            return getRemotePreferences("settings").getBoolean("deep_clean_vip", false);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private boolean isRemoveAdsEnabled() {
+        try {
+            return getRemotePreferences("settings").getBoolean("remove_ads", true);
+        } catch (Exception e) {
+            return true;
         }
     }
 

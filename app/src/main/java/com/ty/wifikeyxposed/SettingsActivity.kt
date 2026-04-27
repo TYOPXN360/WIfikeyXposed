@@ -61,6 +61,7 @@ fun SettingsScreen(onBack: () -> Unit) {
 
     var blockNews by remember { mutableStateOf(prefs.getBoolean("block_news", false)) }
     var unlockVip by remember { mutableStateOf(prefs.getBoolean("unlock_vip", true)) }
+    var deepCleanVip by remember { mutableStateOf(prefs.getBoolean("deep_clean_vip", false)) }
     var removeAds by remember { mutableStateOf(prefs.getBoolean("remove_ads", true)) }
 
     Scaffold(
@@ -107,12 +108,23 @@ fun SettingsScreen(onBack: () -> Unit) {
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     SettingItem(
                         title = "解锁本地会员",
-                        subtitle = "开启极速连接等会员特权",
+                        subtitle = "开启极速连接、SVIP 标识等特权",
                         icon = Icons.Default.Star,
                         checked = unlockVip,
                         onCheckedChange = {
                             unlockVip = it
                             prefs.edit().putBoolean("unlock_vip", it).apply()
+                        }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "极致净化 (隐藏会员入口)",
+                        subtitle = "隐藏我的页面所有会员相关的横幅与图标",
+                        icon = Icons.Default.CleaningServices,
+                        checked = deepCleanVip,
+                        onCheckedChange = {
+                            deepCleanVip = it
+                            prefs.edit().putBoolean("deep_clean_vip", it).apply()
                         }
                     )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
