@@ -7,6 +7,7 @@ package com.ty.wifikeyxposed;
  * 3. 验证流程：每次更改后构建 APK，通过 ADB 安装，重启目标应用，查看 LSPosed 日志。
  * 4. 强制要求：所有更改必须进行 Git Commit。
  * 5. 日志查看方法：adb logcat -s LSPosed LSPosed-Bridge WiFiKeyXposed
+ * 6. Java 路径: /media/tyopxn360/Android/MC/Java/Java21
  */
 
 import android.content.ComponentName;

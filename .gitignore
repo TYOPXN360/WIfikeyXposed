@@ -12,9 +12,9 @@
 /captures
 .externalNativeBuild
 .cxx
-local.properties
 /reverse/
 *.apk
-/project_files/.gradle/
-/project_files/build/
-/project_files/local.properties
+/.gradle/
+/build/
+/app/build/
+/local.properties
