@@ -1,6 +1,6 @@
 package com.ty.wifikeyxposed
 
-import android.content.Context
+import android.content.SharedPreferences
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -14,6 +14,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -21,17 +22,54 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.android.material.color.DynamicColors
+import io.github.libxposed.service.XposedService
+import io.github.libxposed.service.XposedServiceHelper
 
-class SettingsActivity : ComponentActivity() {
+class SettingsActivity : ComponentActivity(), XposedServiceHelper.OnServiceListener {
+    private var remotePrefs by mutableStateOf<SharedPreferences?>(null)
+    private var isServiceBound by mutableStateOf(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         DynamicColors.applyToActivityIfAvailable(this)
         enableEdgeToEdge()
+        
+        // 使用 XposedServiceHelper 绑定服务
+        try {
+            XposedServiceHelper.registerListener(this)
+        } catch (e: Exception) {
+            // 回退逻辑：如果不在 Xposed 环境，尝试使用本地 SP (仅用于预览或测试)
+            isServiceBound = true
+            remotePrefs = getSharedPreferences("settings", MODE_PRIVATE)
+        }
+
         setContent {
             AppTheme {
-                SettingsScreen { finish() }
+                if (isServiceBound && remotePrefs != null) {
+                    SettingsScreen(remotePrefs!!) { finish() }
+                } else {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator()
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text("正在连接 LSPosed 服务...", fontSize = 14.sp)
+                            Text("请确保模块已在 LSPosed 中启用并重启", fontSize = 12.sp, color = MaterialTheme.colorScheme.secondary)
+                        }
+                    }
+                }
             }
         }
+    }
+
+    override fun onServiceBind(service: XposedService) {
+        // 获取远程偏好设置，文件名为 "settings"
+        remotePrefs = service.getRemotePreferences("settings")
+        isServiceBound = true
+    }
+
+    override fun onServiceDied(service: XposedService) {
+        isServiceBound = false
+        remotePrefs = null
     }
 }
 
@@ -55,16 +93,12 @@ fun AppTheme(content: @Composable () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onBack: () -> Unit) {
-    val context = LocalContext.current
-    // 强制使用 WORLD_READABLE 模式（虽然在 Android N+ 被弃用，但配合 LSPosed 仍有意义）
-    // 或者简单的 MODE_PRIVATE 加上明确的 commit() 确保同步写入磁盘
-    val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
-
+fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
+    // 默认值全部设为 false，确保同步逻辑严谨
     var blockNews by remember { mutableStateOf(prefs.getBoolean("block_news", false)) }
-    var unlockVip by remember { mutableStateOf(prefs.getBoolean("unlock_vip", true)) }
+    var unlockVip by remember { mutableStateOf(prefs.getBoolean("unlock_vip", false)) }
     var deepCleanVip by remember { mutableStateOf(prefs.getBoolean("deep_clean_vip", false)) }
-    var removeAds by remember { mutableStateOf(prefs.getBoolean("remove_ads", true)) }
+    var removeAds by remember { mutableStateOf(prefs.getBoolean("remove_ads", false)) }
 
     Scaffold(
         topBar = {
@@ -86,7 +120,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                 .padding(16.dp)
         ) {
             Text(
-                "功能增强",
+                "功能增强 (已连接远程服务)",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(bottom = 8.dp, start = 8.dp)
@@ -104,7 +138,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                         checked = blockNews,
                         onCheckedChange = {
                             blockNews = it
-                            prefs.edit().putBoolean("block_news", it).commit()
+                            prefs.edit().putBoolean("block_news", it).apply()
                         }
                     )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
@@ -115,7 +149,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                         checked = unlockVip,
                         onCheckedChange = {
                             unlockVip = it
-                            prefs.edit().putBoolean("unlock_vip", it).commit()
+                            prefs.edit().putBoolean("unlock_vip", it).apply()
                         }
                     )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
@@ -126,7 +160,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                         checked = deepCleanVip,
                         onCheckedChange = {
                             deepCleanVip = it
-                            prefs.edit().putBoolean("deep_clean_vip", it).commit()
+                            prefs.edit().putBoolean("deep_clean_vip", it).apply()
                         }
                     )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
@@ -137,7 +171,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                         checked = removeAds,
                         onCheckedChange = {
                             removeAds = it
-                            prefs.edit().putBoolean("remove_ads", it).commit()
+                            prefs.edit().putBoolean("remove_ads", it).apply()
                         }
                     )
                 }
