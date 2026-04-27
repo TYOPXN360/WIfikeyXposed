@@ -20,6 +20,11 @@
             </intent-filter>
         </activity>
 
+        <provider
+            android:name=".ConfigProvider"
+            android:authorities="com.ty.wifikeyxposed.config"
+            android:exported="true" />
+
     </application>
 
 </manifest>
