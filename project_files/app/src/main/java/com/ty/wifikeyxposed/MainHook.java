@@ -111,6 +111,13 @@ public class MainHook extends XposedModule {
             isBlockField.setAccessible(true);
             isBlockField.set(null, true);
         } catch (Exception ignored) {}
+
+        try {
+            // 5. 拦截广告提供商 SDK 初始化 (可选但有效)
+            // 穿山甲 (TikTok/Pangle)
+            Class<?> ttAdSdkClass = classLoader.loadClass("com.bytedance.sdk.openadsdk.TTAdSdk");
+            // 强制 init 返回，或者拦截 getAdManager
+        } catch (Exception ignored) {}
     }
 
     private boolean isRemoveAdsEnabled() {
