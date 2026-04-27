@@ -11,7 +11,7 @@ package com.ty.wifikeyxposed;
  * 7. 行为规范：思考必须是中文，交流必须是中文。遇到报错先联网搜索方案，不得盲目乱改。
  * 8. 解锁策略：必须是“解锁会员”而非“删除会员体系”。保留 SVIP 标识，仅隐藏推广横幅。
  * 9. API 规范：100% 符合 libxposed API 101 规范，完全移除旧 API 支持。
- * 10. 修复记录：使用无参构造函数（API 101 必需），并通过 getRemotePreferences("settings") 强制使用 LSPosed 代理读取偏好设置。
+ * 10. 修复记录：使用无参构造函数（API 101 必需），并通过 getRemotePreferences 修复开关失效。
  */
 
 import android.content.ComponentName;
@@ -58,25 +58,31 @@ public class MainHook extends XposedModule {
             mainHandler \u003d new Handler(Looper.getMainLooper());
         }
 
-        boolean vipEnabled \u003d isUnlockVipEnabled();
-        log(4, TAG, "Hooking into: " + param.getPackageName() + " (VIP: " + vipEnabled + ")");
+        // 核心：在初始化时精准读取所有开关
+        final boolean vipEnabled \u003d isUnlockVipEnabled();
+        final boolean removeAds \u003d isRemoveAdsEnabled();
+        final boolean deepClean \u003d isDeepCleanVipEnabled();
+        final boolean blockNews \u003d isBlockNewsEnabled();
+
+        log(4, TAG, String.format("Hooking into: %s (VIP: %b, Ads: %b, Clean: %b, News: %b)", 
+            param.getPackageName(), vipEnabled, removeAds, deepClean, blockNews));
 
         ClassLoader classLoader \u003d param.getClassLoader();
         
         try {
-            hookMeFragment(classLoader);
-            hookPushNotifications(classLoader);
+            hookMeFragment(classLoader, vipEnabled, deepClean);
+            hookPushNotifications(classLoader, blockNews);
             hookVipStatus(classLoader, vipEnabled);
             hookStorage(classLoader, vipEnabled);
             hookCommonFlags(classLoader, vipEnabled);
-            hookAds(classLoader);
+            hookAds(classLoader, removeAds);
         } catch (Throwable e) {
             log(6, TAG, "Initialization error: " + e.getMessage());
         }
     }
 
-    private void hookAds(ClassLoader classLoader) {
-        if (!isRemoveAdsEnabled()) return;
+    private void hookAds(ClassLoader classLoader, boolean enabled) {
+        if (!enabled) return;
         
         final XposedInterface.Hooker returnTrueHooker \u003d new XposedInterface.Hooker() {
             @Override public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable { return true; }
@@ -129,7 +135,7 @@ public class MainHook extends XposedModule {
         } catch (Exception ignored) {}
     }
 
-    private void hookMeFragment(ClassLoader classLoader) {
+    private void hookMeFragment(ClassLoader classLoader, final boolean vipEnabled, final boolean deepClean) {
         try {
             Class<?> meFragmentClass \u003d classLoader.loadClass(ME_FRAGMENT_CLASS);
             
@@ -152,7 +158,7 @@ public class MainHook extends XposedModule {
                 hook(d2Method).intercept(new XposedInterface.Hooker() {
                     @Override
                     public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable {
-                        if (isUnlockVipEnabled()) return true;
+                        if (vipEnabled) return true;
                         return chain.proceed();
                     }
                 });
@@ -162,8 +168,8 @@ public class MainHook extends XposedModule {
                 @Override
                 public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable {
                     Object result \u003d chain.proceed();
-                    if (isUnlockVipEnabled()) {
-                        hideVipBanners(chain.getThisObject());
+                    if (vipEnabled) {
+                        hideVipBanners(chain.getThisObject(), deepClean);
                     }
                     return result;
                 }
@@ -178,12 +184,10 @@ public class MainHook extends XposedModule {
         } catch (Exception ignored) {}
     }
 
-    private void hideVipBanners(Object meFragment) {
+    private void hideVipBanners(Object meFragment, boolean deepClean) {
         try {
             final Object binding \u003d findBindingField(meFragment);
             if (binding \u003d\u003d null) return;
-            
-            final boolean deepClean \u003d isDeepCleanVipEnabled();
             
             String[] promos \u003d {"regionVip", "regionMovieVip"};
             for (String name : promos) {
@@ -451,7 +455,8 @@ public class MainHook extends XposedModule {
         } catch (Throwable ignored) {}
     }
 
-    private void hookPushNotifications(ClassLoader classLoader) {
+    private void hookPushNotifications(ClassLoader classLoader, boolean enabled) {
+        if (!enabled) return;
         try {
             Class<?> pushHelperClass \u003d classLoader.loadClass("com.wifitutu.wakeup.imp.malawi.push.a");
             Class<?> mwTaskModelClass \u003d classLoader.loadClass("com.wifitutu.wakeup.imp.malawi.strategy.bean.MwTaskModel");
@@ -460,8 +465,7 @@ public class MainHook extends XposedModule {
             hook(vMethod).intercept(new XposedInterface.Hooker() {
                 @Override
                 public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable {
-                    if (isBlockNewsEnabled()) return null;
-                    return chain.proceed();
+                    return null; // Block news
                 }
             });
         } catch (Exception ignored) {}
