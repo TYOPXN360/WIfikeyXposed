@@ -12,6 +12,7 @@ package com.ty.wifikeyxposed;
  * 8. 解锁策略：必须是“解锁会员”而非“删除会员体系”。保留 SVIP 标识，仅隐藏推广横幅。
  * 9. API 规范：100% 符合 libxposed API 101 规范，完全移除旧 API 支持。
  * 10. 修复记录：通过 ContentProvider 彻底解决跨进程偏好同步失效问题。
+ * 11. 增强日志：在每次 Hook 决策时输出实时读取到的开关状态。
  */
 
 import android.content.ComponentName;
@@ -52,40 +53,38 @@ public class MainHook extends XposedModule {
 
     private boolean getConfig(String key, boolean def) {
         try {
-            // 首先尝试从 RemotePreferences 读取（性能好）
             SharedPreferences sp = getRemotePreferences("settings");
             if (sp.contains(key)) {
                 return sp.getBoolean(key, def);
             }
-            
-            // 如果读取失败或不包含，尝试通过 ContentProvider 强制读取最新值
-            Uri uri = Uri.parse("content://" + AUTHORITY + "/" + key);
-            // 这里我们需要一个 Context 来调用 contentResolver
-            // 在 onPackageReady 中，我们可以通过 Hook 目标应用的 Context 来获取，
-            // 或者尝试使用 getModuleApplicationInfo() 相关的 context。
-            // 但最简单的是在 Hook 逻辑中直接使用 chain.getThisObject() 的 context。
-            return def; 
-        } catch (Exception e) {
-            return def;
-        }
+        } catch (Exception ignored) {}
+        return def;
     }
 
-    // 优化的实时查询方法
+    // 优化的实时查询方法，带详细日志
     private boolean isFeatureEnabled(Context context, String key, boolean def) {
-        if (context == null) return getConfig(key, def);
+        if (context == null) {
+            boolean val = getConfig(key, def);
+            log(4, TAG, "Realtime check (RemotePrefs) -> " + key + ": " + val);
+            return val;
+        }
         Cursor cursor = null;
         try {
             Uri uri = Uri.parse("content://" + AUTHORITY + "/" + key);
             cursor = context.getContentResolver().query(uri, null, null, null, null);
             if (cursor != null && cursor.moveToFirst()) {
-                return cursor.getInt(0) == 1;
+                boolean val = cursor.getInt(0) == 1;
+                log(4, TAG, "Realtime check (Provider) -> " + key + ": " + val);
+                return val;
             }
         } catch (Exception e) {
             log(6, TAG, "Provider query failed for " + key + ": " + e.getMessage());
         } finally {
             if (cursor != null) cursor.close();
         }
-        return getConfig(key, def);
+        boolean val = getConfig(key, def);
+        log(4, TAG, "Realtime check (Fallback) -> " + key + ": " + val);
+        return val;
     }
 
     @Override
@@ -99,9 +98,8 @@ public class MainHook extends XposedModule {
             mainHandler = new Handler(Looper.getMainLooper());
         }
 
-        // 首次加载状态
-        final boolean vipEnabled = getConfig("unlock_vip", true);
-        log(4, TAG, "Hooking into: " + param.getPackageName() + " (VIP: " + vipEnabled + ")");
+        // 注入阶段状态
+        log(4, TAG, "Initial Hook state - VIP: " + isFeatureEnabled(null, "unlock_vip", true));
 
         ClassLoader classLoader = param.getClassLoader();
         
@@ -118,22 +116,6 @@ public class MainHook extends XposedModule {
     }
 
     private void hookAds(ClassLoader classLoader) {
-        final XposedInterface.Hooker returnTrueHooker = chain -> true;
-        final XposedInterface.Hooker returnFalseHooker = chain -> false;
-
-        XposedInterface.Hooker adDecisionHooker = new XposedInterface.Hooker() {
-            @Override
-            public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable {
-                // 实时查询去广告状态
-                Context ctx = null;
-                if (chain.getThisObject() instanceof View) ctx = ((View) chain.getThisObject()).getContext();
-                if (isFeatureEnabled(ctx, "remove_ads", true)) {
-                    return chain.getExecutable() instanceof Method && ((Method)chain.getExecutable()).getReturnType() == boolean.class ? true : null;
-                }
-                return chain.proceed();
-            }
-        };
-
         try {
             Class<?> abstractAdsClass = classLoader.loadClass("com.wifi.business.potocol.sdk.base.ad.AbstractAds");
             for (Method m : abstractAdsClass.getDeclaredMethods()) {
@@ -196,8 +178,8 @@ public class MainHook extends XposedModule {
                 public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable {
                     Object result = chain.proceed();
                     boolean vip = isFeatureEnabled(null, "unlock_vip", true);
-                    boolean clean = isFeatureEnabled(null, "deep_clean_vip", false);
                     if (vip) {
+                        boolean clean = isFeatureEnabled(null, "deep_clean_vip", false);
                         hideVipBanners(chain.getThisObject(), clean);
                     }
                     return result;
@@ -306,7 +288,6 @@ public class MainHook extends XposedModule {
         final XposedInterface.Hooker vipMethodHooker = new XposedInterface.Hooker() {
             @Override
             public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable {
-                // 实时判断
                 if (!isFeatureEnabled(null, "unlock_vip", true)) return chain.proceed();
 
                 Method m = (Method) chain.getExecutable();
@@ -490,15 +471,6 @@ public class MainHook extends XposedModule {
                 }
             });
         } catch (Exception ignored) {}
-    }
-
-    private boolean isUnlockVipEnabled() {
-        try {
-            SharedPreferences sp = getRemotePreferences("settings");
-            return sp.getBoolean("unlock_vip", true); 
-        } catch (Exception e) {
-            return true; 
-        }
     }
 
     private View getFieldSafe(Object obj, String name) {
