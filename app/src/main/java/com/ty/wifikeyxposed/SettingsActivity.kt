@@ -216,6 +216,7 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                 onClick = {
                     val packageName = "com.snda.wifilocating"
                     val restartAction = "com.ty.wifikeyxposed.ACTION_RESTART"
+                    val appContext = context.applicationContext
                     
                     // 1. 发送免 Root 自杀广播
                     val suicideIntent = android.content.Intent(restartAction).apply {
@@ -223,34 +224,23 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                     }
                     context.sendBroadcast(suicideIntent)
                     
-                    // 2. 利用 AlarmManager 实现系统级延时拉起 (真正意义上的模块自行发起)
-                    try {
-                        val am = context.getSystemService(android.content.Context.ALARM_SERVICE) as android.app.AlarmManager
-                        val launchIntent = context.packageManager.getLaunchIntentForPackage(packageName)
-                        if (launchIntent != null) {
-                            launchIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                            
-                            val pendingIntent = android.app.PendingIntent.getActivity(
-                                context, 
-                                0, 
-                                launchIntent, 
-                                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
-                            )
-                            
-                            // 预约 1.5 秒后拉起
-                            val triggerTime = System.currentTimeMillis() + 1500
-                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-                                am.setExactAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
-                            } else {
-                                am.setExact(android.app.AlarmManager.RTC_WAKEUP, triggerTime, pendingIntent)
+                    Toast.makeText(context, "正在尝试免 Root 重启...", Toast.LENGTH_SHORT).show()
+                    
+                    // 2. 由模块进程直接发起延时拉起，不依赖 AlarmManager
+                    // 使用 1200ms 延迟，确保旧进程已彻底消失
+                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                        try {
+                            val launchIntent = appContext.packageManager.getLaunchIntentForPackage(packageName)
+                            if (launchIntent != null) {
+                                // 移除 CLEAR_TASK，仅使用 NEW_TASK，提高某些 ROM 下的兼容性
+                                launchIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                appContext.startActivity(launchIntent)
+                                android.util.Log.d("WiFiKeyXposed", "Successfully triggered relaunch")
                             }
-                            
-                            Toast.makeText(context, "已预约系统在 1.5s 后重载应用", Toast.LENGTH_SHORT).show()
+                        } catch (e: Exception) {
+                            android.util.Log.e("WiFiKeyXposed", "Manual relaunch failed: " + e.message)
                         }
-                    } catch (e: Exception) {
-                        android.util.Log.e("WiFiKeyXposed", "Alarm setup failed: " + e.message)
-                        Toast.makeText(context, "拉起预约失败，请手动打开", Toast.LENGTH_SHORT).show()
-                    }
+                    }, 1200)
                 },
                 modifier = Modifier.fillMaxWidth(),
                 shape = MaterialTheme.shapes.extraLarge,
