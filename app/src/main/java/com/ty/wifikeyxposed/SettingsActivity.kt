@@ -57,6 +57,8 @@ fun AppTheme(content: @Composable () -> Unit) {
 @Composable
 fun SettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
+    // 强制使用 WORLD_READABLE 模式（虽然在 Android N+ 被弃用，但配合 LSPosed 仍有意义）
+    // 或者简单的 MODE_PRIVATE 加上明确的 commit() 确保同步写入磁盘
     val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
 
     var blockNews by remember { mutableStateOf(prefs.getBoolean("block_news", false)) }
@@ -102,7 +104,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                         checked = blockNews,
                         onCheckedChange = {
                             blockNews = it
-                            prefs.edit().putBoolean("block_news", it).apply()
+                            prefs.edit().putBoolean("block_news", it).commit()
                         }
                     )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
@@ -113,7 +115,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                         checked = unlockVip,
                         onCheckedChange = {
                             unlockVip = it
-                            prefs.edit().putBoolean("unlock_vip", it).apply()
+                            prefs.edit().putBoolean("unlock_vip", it).commit()
                         }
                     )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
@@ -124,7 +126,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                         checked = deepCleanVip,
                         onCheckedChange = {
                             deepCleanVip = it
-                            prefs.edit().putBoolean("deep_clean_vip", it).apply()
+                            prefs.edit().putBoolean("deep_clean_vip", it).commit()
                         }
                     )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
@@ -135,7 +137,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                         checked = removeAds,
                         onCheckedChange = {
                             removeAds = it
-                            prefs.edit().putBoolean("remove_ads", it).apply()
+                            prefs.edit().putBoolean("remove_ads", it).commit()
                         }
                     )
                 }
