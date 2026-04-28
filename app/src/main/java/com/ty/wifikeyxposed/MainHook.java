@@ -113,6 +113,59 @@ public class MainHook extends XposedModule {
      * 实现底栏精简功能及状态实时监控
      */
     private void hookBottomNavigation(ClassLoader classLoader) {
+        // 核心 Hook A: 模仿青少年模式拦截 Tab 初始化 (Source of Truth)
+        try {
+            Class<?> extensionsKtCls = classLoader.loadClass("com.wifitutu.widget.maintab.ExtentionsKt");
+            Class<?> yCls = classLoader.loadClass("com.wifitutu.widget.maintab.y");
+            final Object teenagerEnum = Enum.valueOf((Class<Enum>) yCls, "TEENAGER");
+
+            for (Method m : extensionsKtCls.getDeclaredMethods()) {
+                if (m.getName().equals("a") && m.getParameterCount() == 1) {
+                    hook(m).intercept(chain -> {
+                        Object result = chain.proceed();
+                        if (result != null) return result; // 原生已拦截
+
+                        Object iVar = chain.getArgs().get(0);
+                        try {
+                            Method getIdMethod = iVar.getClass().getMethod("getId");
+                            String id = (String) getIdMethod.invoke(iVar);
+                            String prefKey = mapTabIdToPrefKey(id);
+                            if (prefKey != null && isFeatureEnabled(prefKey, false)) {
+                                log(4, TAG, "Simplified bottom bar (Filter): " + id);
+                                return teenagerEnum;
+                            }
+                        } catch (Exception ignored) {}
+                        return null;
+                    });
+                }
+            }
+        } catch (Exception e) {
+            log(6, TAG, "Failed to hook ExtentionsKt.a: " + e.getMessage());
+        }
+
+        // 核心 Hook B: 拦截视频/广场/发现等硬编码开关
+        try {
+            Class<?> movieExtCls = classLoader.loadClass("com.wifitutu.extents.c");
+            hook(movieExtCls.getDeclaredMethod("d")).intercept(chain -> {
+                if (isFeatureEnabled("hide_tab_video", false)) return false;
+                return chain.proceed();
+            });
+            hook(movieExtCls.getDeclaredMethod("b")).intercept(chain -> {
+                if (isFeatureEnabled("hide_tab_nearby", false)) return false;
+                return chain.proceed();
+            });
+        } catch (Exception ignored) {}
+
+        // 核心 Hook C: 拦截 WebTab 开关
+        try {
+            Class<?> webTabCls = classLoader.loadClass("com.wifitutu.ui.web.d");
+            hook(webTabCls.getDeclaredMethod("f")).intercept(chain -> {
+                if (isFeatureEnabled("hide_tab_web", false)) return false;
+                return chain.proceed();
+            });
+        } catch (Exception ignored) {}
+
+        // 核心 Hook D: 强制压制 View 可见性 (Catch-all)
         try {
             Class<?> viewCls = classLoader.loadClass("android.view.View");
             Method setVisibilityMethod = viewCls.getMethod("setVisibility", int.class);
@@ -132,10 +185,11 @@ public class MainHook extends XposedModule {
                 String prefKey = mapResNameToPrefKey(resName);
                 if (prefKey == null) return chain.proceed();
 
-                // 逻辑 A: 如果模块设置了隐藏，且应用尝试显示 -> 拦截
+                // 逻辑 A: 如果模块设置了隐藏，且应用尝试显示 -> 拦截并强制设为 GONE
                 if (requestedVisibility == View.VISIBLE && isFeatureEnabled(prefKey, false)) {
                     log(4, TAG, "Blocking Visibility on tab: " + resName);
-                    return null; 
+                    chain.getArgs().set(0, View.GONE); // 修改参数为 GONE
+                    return chain.proceed();
                 }
 
                 // 逻辑 B: 实时监控。如果应用自己设为 GONE -> 自动同步模块开关为 ON (Hidden)
@@ -146,19 +200,31 @@ public class MainHook extends XposedModule {
                 return chain.proceed();
             });
 
-            // 生命周期刷新
-            try {
-                Class<?> mainActivityCls = classLoader.loadClass("com.wifitutu.ui.main.MainActivity");
-                Method onResumeMethod = mainActivityCls.getDeclaredMethod("onResume");
-                hook(onResumeMethod).intercept(chain -> {
-                    Object result = chain.proceed();
-                    mainHandler.postDelayed(() -> refreshBottomTabs(chain.getThisObject()), 1000);
-                    return result;
-                });
-            } catch (Exception ignored) {}
+            // 生命周期刷新 (二次压制)
+            Class<?> mainActivityCls = classLoader.loadClass("com.wifitutu.ui.main.MainActivity");
+            Method onResumeMethod = mainActivityCls.getDeclaredMethod("onResume");
+            hook(onResumeMethod).intercept(chain -> {
+                Object result = chain.proceed();
+                mainHandler.postDelayed(() -> refreshBottomTabs(chain.getThisObject()), 1500);
+                return result;
+            });
 
         } catch (Exception e) {
-            log(6, TAG, "Failed to hook BottomNavigation: " + e.getMessage());
+            log(6, TAG, "Failed to hook BottomNavigation catch-all: " + e.getMessage());
+        }
+    }
+
+    private String mapTabIdToPrefKey(String id) {
+        if (id == null) return null;
+        switch (id) {
+            case "connect": return "hide_tab_home";
+            case "nearby": return "hide_tab_nearby";
+            case "movie": return "hide_tab_video";
+            case "welfare": return "hide_tab_welfare";
+            case "im": return "hide_tab_im";
+            case "guard": return "hide_tab_guard";
+            case "mine": return "hide_tab_me";
+            default: return null;
         }
     }
 
