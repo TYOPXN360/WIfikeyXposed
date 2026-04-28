@@ -34,6 +34,8 @@ import io.github.libxposed.api.XposedInterface;
 import io.github.libxposed.api.XposedModule;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -104,6 +106,7 @@ public class MainHook extends XposedModule {
             hookTeenagerMode(classLoader);
             hookCloudControl(classLoader);
             hookBottomNavigation(classLoader);
+            hookHomeWidgets(classLoader);
         } catch (Throwable e) {
             log(6, TAG, "Initialization error: " + e.getMessage());
         }
@@ -271,6 +274,79 @@ public class MainHook extends XposedModule {
         } catch (Exception ignored) {
         } finally {
             isPerformingForcedHide = false;
+        }
+    }
+
+    private void hookHomeWidgets(ClassLoader classLoader) {
+        // 核心 Hook A: 拦截工具栏列表并按需过滤 (Source of Truth)
+        try {
+            Class<?> toolsHelperCls = classLoader.loadClass("com.wifitutu.ui.rn.b");
+            
+            // 总开关
+            hook(toolsHelperCls.getDeclaredMethod("g")).intercept(chain -> {
+                if (isFeatureEnabled("hide_tool_area", false)) return false;
+                return chain.proceed();
+            });
+
+            // 列表过滤
+            hook(toolsHelperCls.getDeclaredMethod("f")).intercept(chain -> {
+                List<?> originalList = (List<?>) chain.proceed();
+                if (originalList == null) return null;
+
+                List<Object> filteredList = new ArrayList<>();
+                for (Object item : originalList) {
+                    try {
+                        Method getIdMethod = item.getClass().getMethod("getId");
+                        String id = (String) getIdMethod.invoke(item);
+                        String prefKey = mapWidgetIdToPrefKey(id);
+                        if (prefKey != null && isFeatureEnabled(prefKey, false)) {
+                            log(4, TAG, "Simplified tool widget: " + id);
+                            continue; // 过滤
+                        }
+                    } catch (Exception ignored) {}
+                    filteredList.add(item);
+                }
+                return filteredList;
+            });
+        } catch (Exception e) {
+            log(6, TAG, "Failed to hook Home Widgets list: " + e.getMessage());
+        }
+
+        // 核心 Hook B: 拦截 HomeDialog 中的其他组件
+        try {
+            Class<?> homeDialogCls = classLoader.loadClass("com.wifitutu.ui.home.HomeDialog");
+
+            // IM 消息提醒
+            hook(homeDialogCls.getDeclaredMethod("S1")).intercept(chain -> {
+                if (isFeatureEnabled("hide_tool_im", false)) return null;
+                return chain.proceed();
+            });
+
+            // VIP 顶部入口
+            hook(homeDialogCls.getDeclaredMethod("a1")).intercept(chain -> {
+                if (isFeatureEnabled("hide_tool_vip", false)) return null;
+                return chain.proceed();
+            });
+
+            // 用户个人信息布局
+            hook(homeDialogCls.getDeclaredMethod("x1")).intercept(chain -> {
+                if (isFeatureEnabled("hide_tool_user", false)) return null;
+                return chain.proceed();
+            });
+        } catch (Exception e) {
+            log(6, TAG, "Failed to hook HomeDialog components: " + e.getMessage());
+        }
+    }
+
+    private String mapWidgetIdToPrefKey(String id) {
+        if (id == null) return null;
+        switch (id) {
+            case "501": return "hide_tool_clean";     // 垃圾清理
+            case "502": return "hide_tool_speedup";   // 手机加速
+            case "503": return "hide_tool_cooling";   // 手机降温
+            case "505": return "hide_tool_speedtest"; // 网络测速
+            case "504": return "hide_tool_fragments"; // 文件碎片
+            default: return null;
         }
     }
 
