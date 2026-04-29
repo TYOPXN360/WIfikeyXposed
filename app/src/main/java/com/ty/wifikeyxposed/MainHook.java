@@ -333,8 +333,66 @@ public class MainHook extends XposedModule {
                 if (isFeatureEnabled("hide_tool_user", false)) return null;
                 return chain.proceed();
             });
+
+            // 赋能面板 (Empower Panel)
+            try {
+                // I1 是负责计算并显示赋能面板高度的方法，拦截它可以阻止面板显示
+                hook(homeDialogCls.getDeclaredMethod("I1", homeDialogCls)).intercept(chain -> {
+                    if (isFeatureEnabled("hide_tool_empower", false)) return null;
+                    return chain.proceed();
+                });
+            } catch (Exception ignored) {}
         } catch (Exception e) {
             log(6, TAG, "Failed to hook HomeDialog components: " + e.getMessage());
+        }
+
+        // 核心 Hook C: 拦截动态卡片 (Dynamic Card)
+        try {
+            Class<?> rnDynamicCardCls = classLoader.loadClass("com.wifitutu.ui.view.dynamiccard.RnWifiDynamicCardView");
+            hook(rnDynamicCardCls.getDeclaredMethod("isSupportDynamicCard")).intercept(chain -> {
+                if (isFeatureEnabled("hide_tool_dynamic_card", false)) return false;
+                return chain.proceed();
+            });
+        } catch (Exception e) {
+            log(6, TAG, "Failed to hook RnWifiDynamicCardView: " + e.getMessage());
+        }
+
+        // 核心 Hook D: 拦截 Target 30 提示
+        try {
+            Class<?> x5Cls = classLoader.loadClass("com.wifitutu.link.foundation.core.x5");
+            Class<?> n1Cls = classLoader.loadClass("com.wifitutu.link.foundation.sdk.n1");
+            // D 方法是负责渲染这些小组件的核心入口
+            // 尝试不同的方法签名
+            boolean hooked = false;
+            for (Method m : x5Cls.getDeclaredMethods()) {
+                if (m.getName().equals("D")) {
+                    Class<?>[] params = m.getParameterTypes();
+                    if (params.length >= 1 && params[0] == n1Cls) {
+                        hook(m).intercept(chain -> {
+                            Object n1Obj = chain.getArgs().get(0);
+                            if (n1Obj != null) {
+                                try {
+                                    Method getIdMethod = n1Obj.getClass().getMethod("getId");
+                                    String id = (String) getIdMethod.invoke(n1Obj);
+                                    if (id != null && id.contains("target30") && isFeatureEnabled("hide_tool_target30", false)) {
+                                        log(4, TAG, "Blocking Target30 widget: " + id);
+                                        return null;
+                                    }
+                                } catch (Exception ignored) {}
+                            }
+                            return chain.proceed();
+                        });
+                        hooked = true;
+                        log(4, TAG, "Successfully hooked Target30 method D");
+                        break;
+                    }
+                }
+            }
+            if (!hooked) {
+                log(6, TAG, "Failed to find Target30 method D with correct signature");
+            }
+        } catch (Exception e) {
+            log(6, TAG, "Failed to hook Target30 widgets: " + e.getMessage());
         }
     }
 

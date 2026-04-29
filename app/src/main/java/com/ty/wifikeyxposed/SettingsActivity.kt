@@ -113,6 +113,20 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
     var liteTeenager by remember(tick) { mutableStateOf(prefs.getBoolean("lite_teenager", false)) }
     var removeCloudControl by remember(tick) { mutableStateOf(prefs.getBoolean("remove_cloud_control", false)) }
 
+    // 首页小组件精简状态
+    var hideToolClean by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_clean", false)) }
+    var hideToolSpeedup by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_speedup", false)) }
+    var hideToolCooling by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_cooling", false)) }
+    var hideToolSpeedtest by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_speedtest", false)) }
+    var hideToolFragments by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_fragments", false)) }
+    var hideToolVip by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_vip", false)) }
+    var hideToolUser by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_user", false)) }
+    var hideToolIm by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_im", false)) }
+    var hideToolEmpower by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_empower", false)) }
+    var hideToolDynamicCard by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_dynamic_card", false)) }
+    var hideToolTarget30 by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_target30", false)) }
+    var hideToolArea by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_area", false)) }
+
     // 底栏精简状态
     var hideHome by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_home", false)) }
     var hideNearby by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_nearby", false)) }
@@ -128,7 +142,9 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
     var showMeWarning by remember { mutableStateOf(false) }
 
     val allSelected = blockNews && unlockVip && deepCleanVip && removeAds && liteTeenager && removeCloudControl &&
-            hideNearby && hideVideo && hideWelfare && hideIm && hideWeb && hideGuard
+            hideNearby && hideVideo && hideWelfare && hideIm && hideWeb && hideGuard &&
+            hideToolClean && hideToolSpeedup && hideToolCooling && hideToolSpeedtest && hideToolFragments &&
+            hideToolVip && hideToolUser && hideToolIm && hideToolEmpower && hideToolDynamicCard && hideToolTarget30 && hideToolArea
             // 注意：根据要求，全选默认不包含 hideHome 和 hideMe
 
     Scaffold(
@@ -157,6 +173,19 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                         hideWeb = target
                         hideGuard = target
 
+                        hideToolClean = target
+                        hideToolSpeedup = target
+                        hideToolCooling = target
+                        hideToolSpeedtest = target
+                        hideToolFragments = target
+                        hideToolVip = target
+                        hideToolUser = target
+                        hideToolIm = target
+                        hideToolEmpower = target
+                        hideToolDynamicCard = target
+                        hideToolTarget30 = target
+                        hideToolArea = target
+
                         prefs.edit().run {
                             putBoolean("block_news", target)
                             putBoolean("unlock_vip", target)
@@ -171,6 +200,19 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                             putBoolean("hide_tab_im", target)
                             putBoolean("hide_tab_web", target)
                             putBoolean("hide_tab_guard", target)
+
+                            putBoolean("hide_tool_clean", target)
+                            putBoolean("hide_tool_speedup", target)
+                            putBoolean("hide_tool_cooling", target)
+                            putBoolean("hide_tool_speedtest", target)
+                            putBoolean("hide_tool_fragments", target)
+                            putBoolean("hide_tool_vip", target)
+                            putBoolean("hide_tool_user", target)
+                            putBoolean("hide_tool_im", target)
+                            putBoolean("hide_tool_empower", target)
+                            putBoolean("hide_tool_dynamic_card", target)
+                            putBoolean("hide_tool_target30", target)
+                            putBoolean("hide_tool_area", target)
                             apply()
                         }
                     }) {
@@ -365,6 +407,118 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                         icon = Icons.Default.Person,
                         checked = hideMe,
                         onCheckedChange = { if (it) showMeWarning = true else { hideMe = false; prefs.edit().putBoolean("hide_tab_me", false).apply() } }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Text(
+                "精简首页组件 (极致净化)",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 8.dp, start = 8.dp)
+            )
+
+            ElevatedCard(
+                shape = MaterialTheme.shapes.extraLarge,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(8.dp)) {
+                    SettingItem(
+                        title = "精简工具栏总开关",
+                        subtitle = "隐藏首页整个工具栏区域",
+                        icon = Icons.Default.Apps,
+                        checked = hideToolArea,
+                        onCheckedChange = { hideToolArea = it; prefs.edit().putBoolean("hide_tool_area", it).apply() }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "精简垃圾清理",
+                        subtitle = "隐藏首页工具栏中的清理入口",
+                        icon = Icons.Default.Delete,
+                        checked = hideToolClean,
+                        onCheckedChange = { hideToolClean = it; prefs.edit().putBoolean("hide_tool_clean", it).apply() }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "精简手机加速",
+                        subtitle = "隐藏首页工具栏中的加速入口",
+                        icon = Icons.Default.Speed,
+                        checked = hideToolSpeedup,
+                        onCheckedChange = { hideToolSpeedup = it; prefs.edit().putBoolean("hide_tool_speedup", it).apply() }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "精简手机降温",
+                        subtitle = "隐藏首页工具栏中的降温入口",
+                        icon = Icons.Default.Thermostat,
+                        checked = hideToolCooling,
+                        onCheckedChange = { hideToolCooling = it; prefs.edit().putBoolean("hide_tool_cooling", it).apply() }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "精简网络测速",
+                        subtitle = "隐藏首页工具栏中的测速入口",
+                        icon = Icons.Default.WifiTethering,
+                        checked = hideToolSpeedtest,
+                        onCheckedChange = { hideToolSpeedtest = it; prefs.edit().putBoolean("hide_tool_speedtest", it).apply() }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "精简文件碎片",
+                        subtitle = "隐藏首页工具栏中的文件入口",
+                        icon = Icons.Default.FileOpen,
+                        checked = hideToolFragments,
+                        onCheckedChange = { hideToolFragments = it; prefs.edit().putBoolean("hide_tool_fragments", it).apply() }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "精简顶部 VIP",
+                        subtitle = "隐藏右上角 VIP 会员入口",
+                        icon = Icons.Default.CardMembership,
+                        checked = hideToolVip,
+                        onCheckedChange = { hideToolVip = it; prefs.edit().putBoolean("hide_tool_vip", it).apply() }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "精简用户信息",
+                        subtitle = "隐藏首页顶部的用户头像与昵称",
+                        icon = Icons.Default.AccountCircle,
+                        checked = hideToolUser,
+                        onCheckedChange = { hideToolUser = it; prefs.edit().putBoolean("hide_tool_user", it).apply() }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "精简 IM 提醒",
+                        subtitle = "隐藏首页的消息/通知弹窗提醒",
+                        icon = Icons.Default.Sms,
+                        checked = hideToolIm,
+                        onCheckedChange = { hideToolIm = it; prefs.edit().putBoolean("hide_tool_im", it).apply() }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "精简赋能面板",
+                        subtitle = "隐藏连接成功后的功能赋能面板",
+                        icon = Icons.Default.Extension,
+                        checked = hideToolEmpower,
+                        onCheckedChange = { hideToolEmpower = it; prefs.edit().putBoolean("hide_tool_empower", it).apply() }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "精简动态卡片",
+                        subtitle = "隐藏首页底部的各类动态广告/内容卡片",
+                        icon = Icons.Default.FeaturedPlayList,
+                        checked = hideToolDynamicCard,
+                        onCheckedChange = { hideToolDynamicCard = it; prefs.edit().putBoolean("hide_tool_dynamic_card", it).apply() }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "精简 Target 30",
+                        subtitle = "隐藏 Target 30 相关的升级或指窗提示",
+                        icon = Icons.Default.Warning,
+                        checked = hideToolTarget30,
+                        onCheckedChange = { hideToolTarget30 = it; prefs.edit().putBoolean("hide_tool_target30", it).apply() }
                     )
                 }
             }
