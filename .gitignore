@@ -22,3 +22,4 @@ lsp_log_*.txt
 .kotlin/
 verify.png
 *.jar
+tools/
