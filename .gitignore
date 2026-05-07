@@ -18,3 +18,10 @@
 /build/
 /app/build/
 /local.properties
+lsp_log_*.txt
+.kotlin/
+.idea/MarsCodeWorkspaceAppSettings.xml
+.idea/misc.xml
+.idea/planningMode.xml
+verify.png
+tools/jadx/lib/jadx-1.5.0-all.jar

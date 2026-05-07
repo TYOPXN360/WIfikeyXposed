@@ -118,7 +118,12 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
     var hideToolSpeedup by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_speedup", false)) }
     var hideToolCooling by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_cooling", false)) }
     var hideToolSpeedtest by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_speedtest", false)) }
-    var hideToolFragments by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_fragments", false)) }
+    var hideToolNetwork by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_network", false)) }
+    var hideToolSecurity by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_security", false)) }
+    var hideToolKuaikan by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_kuaikan", false)) }
+    var hideToolNovel by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_novel", false)) }
+    var hideToolGame by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_game", false)) }
+    var hideToolMore by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_more", false)) }
     var hideToolVip by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_vip", false)) }
     var hideToolUser by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_user", false)) }
     var hideToolIm by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_im", false)) }
@@ -143,7 +148,8 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
 
     val allSelected = blockNews && unlockVip && deepCleanVip && removeAds && liteTeenager && removeCloudControl &&
             hideNearby && hideVideo && hideWelfare && hideIm && hideWeb && hideGuard &&
-            hideToolClean && hideToolSpeedup && hideToolCooling && hideToolSpeedtest && hideToolFragments &&
+            hideToolClean && hideToolSpeedup && hideToolCooling && hideToolSpeedtest &&
+            hideToolNetwork && hideToolSecurity && hideToolKuaikan && hideToolNovel && hideToolGame && hideToolMore &&
             hideToolVip && hideToolUser && hideToolIm && hideToolEmpower && hideToolDynamicCard && hideToolTarget30 && hideToolArea
             // 注意：根据要求，全选默认不包含 hideHome 和 hideMe
 
@@ -177,7 +183,12 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                         hideToolSpeedup = target
                         hideToolCooling = target
                         hideToolSpeedtest = target
-                        hideToolFragments = target
+                        hideToolNetwork = target
+                        hideToolSecurity = target
+                        hideToolKuaikan = target
+                        hideToolNovel = target
+                        hideToolGame = target
+                        hideToolMore = target
                         hideToolVip = target
                         hideToolUser = target
                         hideToolIm = target
@@ -205,7 +216,12 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                             putBoolean("hide_tool_speedup", target)
                             putBoolean("hide_tool_cooling", target)
                             putBoolean("hide_tool_speedtest", target)
-                            putBoolean("hide_tool_fragments", target)
+                            putBoolean("hide_tool_network", target)
+                            putBoolean("hide_tool_security", target)
+                            putBoolean("hide_tool_kuaikan", target)
+                            putBoolean("hide_tool_novel", target)
+                            putBoolean("hide_tool_game", target)
+                            putBoolean("hide_tool_more", target)
                             putBoolean("hide_tool_vip", target)
                             putBoolean("hide_tool_user", target)
                             putBoolean("hide_tool_im", target)
@@ -466,11 +482,51 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                     )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     SettingItem(
-                        title = "精简文件碎片",
-                        subtitle = "隐藏首页工具栏中的文件入口",
-                        icon = Icons.Default.FileOpen,
-                        checked = hideToolFragments,
-                        onCheckedChange = { hideToolFragments = it; prefs.edit().putBoolean("hide_tool_fragments", it).apply() }
+                        title = "精简网络加速",
+                        subtitle = "隐藏首页工具栏中的网络加速入口",
+                        icon = Icons.Default.NetworkCheck,
+                        checked = hideToolNetwork,
+                        onCheckedChange = { hideToolNetwork = it; prefs.edit().putBoolean("hide_tool_network", it).apply() }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "精简安全检测",
+                        subtitle = "隐藏首页工具栏中的安全检测入口",
+                        icon = Icons.Default.Security,
+                        checked = hideToolSecurity,
+                        onCheckedChange = { hideToolSecurity = it; prefs.edit().putBoolean("hide_tool_security", it).apply() }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "精简快看",
+                        subtitle = "隐藏首页工具栏中的快看入口",
+                        icon = Icons.Default.PlayCircle,
+                        checked = hideToolKuaikan,
+                        onCheckedChange = { hideToolKuaikan = it; prefs.edit().putBoolean("hide_tool_kuaikan", it).apply() }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "精简免费小说",
+                        subtitle = "隐藏首页工具栏中的免费小说入口",
+                        icon = Icons.Default.Book,
+                        checked = hideToolNovel,
+                        onCheckedChange = { hideToolNovel = it; prefs.edit().putBoolean("hide_tool_novel", it).apply() }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "精简游戏中心",
+                        subtitle = "隐藏首页工具栏中的游戏中心入口",
+                        icon = Icons.Default.Gamepad,
+                        checked = hideToolGame,
+                        onCheckedChange = { hideToolGame = it; prefs.edit().putBoolean("hide_tool_game", it).apply() }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "精简更多",
+                        subtitle = "隐藏首页工具栏中的更多入口",
+                        icon = Icons.Default.MoreVert,
+                        checked = hideToolMore,
+                        onCheckedChange = { hideToolMore = it; prefs.edit().putBoolean("hide_tool_more", it).apply() }
                     )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     SettingItem(

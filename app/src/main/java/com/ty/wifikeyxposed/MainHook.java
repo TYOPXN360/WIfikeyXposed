@@ -278,38 +278,109 @@ public class MainHook extends XposedModule {
     }
 
     private void hookHomeWidgets(ClassLoader classLoader) {
-        // 核心 Hook A: 拦截工具栏列表并按需过滤 (Source of Truth)
+        // 核心 Hook 1: 拦截工具助手类的 g() 方法 (总开关)
         try {
             Class<?> toolsHelperCls = classLoader.loadClass("com.wifitutu.ui.rn.b");
-            
-            // 总开关
-            hook(toolsHelperCls.getDeclaredMethod("g")).intercept(chain -> {
-                if (isFeatureEnabled("hide_tool_area", false)) return false;
+            Method gMethod = toolsHelperCls.getDeclaredMethod("g");
+            log(4, TAG, "Found toolsHelperCls.g() method");
+            hook(gMethod).intercept(chain -> {
+                boolean result = isFeatureEnabled("hide_tool_area", false);
+                log(4, TAG, "Toolbar switch g() called, hide_tool_area=" + result);
+                if (result) return false;
                 return chain.proceed();
             });
-
-            // 列表过滤
-            hook(toolsHelperCls.getDeclaredMethod("f")).intercept(chain -> {
-                List<?> originalList = (List<?>) chain.proceed();
-                if (originalList == null) return null;
-
-                List<Object> filteredList = new ArrayList<>();
-                for (Object item : originalList) {
-                    try {
-                        Method getIdMethod = item.getClass().getMethod("getId");
-                        String id = (String) getIdMethod.invoke(item);
-                        String prefKey = mapWidgetIdToPrefKey(id);
-                        if (prefKey != null && isFeatureEnabled(prefKey, false)) {
-                            log(4, TAG, "Simplified tool widget: " + id);
-                            continue; // 过滤
-                        }
-                    } catch (Exception ignored) {}
-                    filteredList.add(item);
-                }
-                return filteredList;
-            });
+            log(4, TAG, "Hooked toolbar switch method g()");
         } catch (Exception e) {
-            log(6, TAG, "Failed to hook Home Widgets list: " + e.getMessage());
+            log(6, TAG, "Failed to hook toolsHelperCls.g(): " + e.getMessage());
+        }
+
+        // 核心 Hook 2: 拦截工具配置类 b.a() 方法 - 在数据源层面过滤toolItems
+        try {
+            Class<?> toolsConfigCls = classLoader.loadClass("com.wifitutu.widget.svc.wkconfig.config.api.generate.tools.b");
+            Class<?> q0Cls = classLoader.loadClass("com.wifitutu.link.foundation.core.q0");
+            Method aMethod = toolsConfigCls.getDeclaredMethod("a", q0Cls);
+            log(4, TAG, "Found toolsConfigCls.a() method");
+            
+            hook(aMethod).intercept(chain -> {
+                Object result = chain.proceed();
+                if (result != null) {
+                    log(4, TAG, "toolsConfigCls.a() returned HomeHeadTools object");
+                    try {
+                        Method getToolItemsMethod = result.getClass().getMethod("getToolItems");
+                        List<?> toolItems = (List<?>) getToolItemsMethod.invoke(result);
+                        if (toolItems != null) {
+                            log(4, TAG, "Original toolItems size: " + toolItems.size());
+                            List<Object> filteredList = new ArrayList<>();
+                            for (Object item : toolItems) {
+                                Method getIdMethod = item.getClass().getMethod("getId");
+                                String id = (String) getIdMethod.invoke(item);
+                                Method getNameMethod = item.getClass().getMethod("getName");
+                                String name = (String) getNameMethod.invoke(item);
+                                
+                                String prefKey = mapWidgetIdToPrefKey(id);
+                                if (prefKey == null) {
+                                    prefKey = mapOldWidgetIdToPrefKey(id);
+                                }
+                                log(4, TAG, "Tool item from config: id=" + id + ", name=" + name + ", prefKey=" + prefKey);
+                                
+                                if (prefKey != null && isFeatureEnabled(prefKey, false)) {
+                                    log(4, TAG, "Filtering tool from config: " + name + " (" + id + ")");
+                                    continue;
+                                }
+                                filteredList.add(item);
+                            }
+                            Method setToolItemsMethod = result.getClass().getMethod("setToolItems", List.class);
+                            setToolItemsMethod.invoke(result, filteredList);
+                            log(4, TAG, "Tool items filtered: " + toolItems.size() + " -> " + filteredList.size());
+                        }
+                    } catch (Exception e) {
+                        log(6, TAG, "Error filtering tool items from config: " + e.getMessage());
+                    }
+                }
+                return result;
+            });
+            log(4, TAG, "Hooked toolsConfigCls.a() method with filtering");
+        } catch (Exception e) {
+            log(6, TAG, "Failed to hook toolsConfigCls.a(): " + e.getMessage());
+        }
+
+        // 核心 Hook 3: 拦截 ConfigRnModule.Module.find() - JS读取原始配置JSON
+        try {
+            Class<?> configRnModuleCls = classLoader.loadClass("com.wifitutu.link.foundation.react_native.plugin.ConfigRnModule");
+            Class<?>[] declaredClasses = configRnModuleCls.getDeclaredClasses();
+            Class<?> moduleCls = null;
+            for (Class<?> cls : declaredClasses) {
+                if (cls.getSimpleName().equals("Module")) {
+                    moduleCls = cls;
+                    break;
+                }
+            }
+            if (moduleCls != null) {
+                Class<?> readableMapCls = classLoader.loadClass("com.facebook.react.bridge.ReadableMap");
+                Method findMethod = moduleCls.getDeclaredMethod("find", readableMapCls);
+                log(4, TAG, "Found ConfigRnModule.Module.find() method");
+                
+                hook(findMethod).intercept(chain -> {
+                    Object result = chain.proceed();
+                    if (result != null) {
+                        try {
+                            Object callArg = chain.getArgs().get(0);
+                            Method getStringMethod = callArg.getClass().getMethod("getString", String.class);
+                            String key = (String) getStringMethod.invoke(callArg, "key");
+                            if ("connect_tools_config".equals(key)) {
+                                log(4, TAG, "ConfigRnModule.Module.find() called with key=connect_tools_config");
+                                // result is WritableMap {"data": raw_json_object}
+                                // We already filtered in toolsConfigCls.a(), so no need to double-filter
+                                // But if find() is called directly by JS, this catches it too
+                            }
+                        } catch (Exception ignored) {}
+                    }
+                    return result;
+                });
+                log(4, TAG, "Hooked ConfigRnModule.Module.find() method");
+            }
+        } catch (Exception e) {
+            log(6, TAG, "Failed to hook ConfigRnModule.Module.find(): " + e.getMessage());
         }
 
         // 核心 Hook B: 拦截 HomeDialog 中的其他组件
@@ -399,11 +470,28 @@ public class MainHook extends XposedModule {
     private String mapWidgetIdToPrefKey(String id) {
         if (id == null) return null;
         switch (id) {
+            case "12": return "hide_tool_clean";     // 垃圾清理
+            case "13": return "hide_tool_speedup";   // 手机加速
+            case "14": return "hide_tool_cooling";   // 手机降温
+            case "16": return "hide_tool_speedtest"; // 网络测速
+            case "17": return "hide_tool_network";   // 网络加速
+            case "18": return "hide_tool_security";  // 安全检测
+            case "20": return "hide_tool_kuaikan";   // 快看
+            case "56": return "hide_tool_novel";     // 免费小说
+            case "60": return "hide_tool_game";      // 游戏中心
+            case "100": return "hide_tool_more";     // 更多
+            default: return null;
+        }
+    }
+
+    private String mapOldWidgetIdToPrefKey(String id) {
+        if (id == null) return null;
+        switch (id) {
             case "501": return "hide_tool_clean";     // 垃圾清理
             case "502": return "hide_tool_speedup";   // 手机加速
             case "503": return "hide_tool_cooling";   // 手机降温
             case "505": return "hide_tool_speedtest"; // 网络测速
-            case "504": return "hide_tool_fragments"; // 文件碎片
+            case "504": return "hide_tool_pieces";    // 文件碎片
             default: return null;
         }
     }
