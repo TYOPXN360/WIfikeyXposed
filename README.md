@@ -2,6 +2,17 @@
 
 WiFi万能钥匙 5.2.13 的 Xposed 模块，提供本地 SVIP 永久解锁、全模块去广告、底栏/工具栏精简等功能。
 
+## ⚠️ 代码生成说明（重要警告）
+
+> **本模块的核心代码（MainHook.java、SettingsActivity.kt）由 AI 代码助手生成**，并在真机上验证功能可用性。
+
+### 已验证功能
+- ✅ 底栏精简功能正常工作
+- ✅ 工具栏精简功能正常工作
+- ✅ SVIP 解锁功能正常
+- ✅ 去广告功能正常
+- ✅ 模块设置界面响应流畅
+
 ## 功能特性
 
 ### 核心功能
@@ -35,17 +46,6 @@ WiFi万能钥匙 5.2.13 的 Xposed 模块，提供本地 SVIP 永久解锁、全
 - **开发框架**：Android Gradle + Kotlin
 - **Hook 技术**：反射拦截 + 方法替换
 
-## 代码生成说明
-
-本模块的核心代码（MainHook.java、SettingsActivity.kt）由 AI 代码助手生成，并在真机上验证功能可用性。
-
-### 验证结果
-✅ 底栏精简功能正常工作
-✅ 工具栏精简功能正常工作
-✅ SVIP 解锁功能正常
-✅ 去广告功能正常
-✅ 模块设置界面响应流畅
-
 ## 安装说明
 
 1. 确保设备已安装 LSPosed 或类似的 Xposed 框架
@@ -74,7 +74,6 @@ WIfikeyXposed/
 │   └── src/main/java/com/ty/wifikeyxposed/
 │       ├── MainHook.java          # 核心Hook逻辑
 │       └── SettingsActivity.kt     # 设置界面
-├── deploy_and_log.sh               # 自动化部署脚本
 ├── build.gradle.kts                # Gradle构建配置
 └── settings.gradle.kts             # 项目设置
 ```
