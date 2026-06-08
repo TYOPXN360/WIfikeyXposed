@@ -24,3 +24,5 @@ verify.png
 *.jar
 tools/
 deploy_and_log.sh
+keystore.properties
+wifikeyxposed.keystore
