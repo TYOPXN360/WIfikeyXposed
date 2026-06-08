@@ -5,75 +5,69 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- WiFi arcs (3 arcs, bottom half) -->
+    <!-- WiFi arcs (3 arcs, bottom half, centered at 96,56 — within safe zone) -->
     <path
-        android:pathData="M96,72 a18,18 0 0 0 -18,-18"
-        android:strokeColor="#000000"
-        android:strokeWidth="12"
+        android:pathData="M96,64 a12,12 0 0 0 -12,-12"
+        android:strokeColor="@android:color/system_accent1_600"
+        android:strokeWidth="10"
         android:fillColor="#00000000"
         android:strokeLineCap="round"/>
     <path
-        android:pathData="M96,84 a33,33 0 0 0 -33,-33"
-        android:strokeColor="#000000"
-        android:strokeWidth="12"
+        android:pathData="M96,73 a22,22 0 0 0 -22,-22"
+        android:strokeColor="@android:color/system_accent1_600"
+        android:strokeWidth="10"
         android:fillColor="#00000000"
         android:strokeLineCap="round"/>
     <path
-        android:pathData="M96,96 a48,48 0 0 0 -48,-48"
-        android:strokeColor="#000000"
-        android:strokeWidth="12"
+        android:pathData="M96,82 a32,32 0 0 0 -32,-32"
+        android:strokeColor="@android:color/system_accent1_600"
+        android:strokeWidth="10"
         android:fillColor="#00000000"
         android:strokeLineCap="round"/>
 
-    <!-- Key head (stroke circle) -->
+    <!-- Key head (stroke circle, centered at 48,58 — safe zone) -->
     <path
-        android:pathData="M42,34 m-20,0 a20,20 0 1 1,40 0 a20,20 0 1 1,-40 0"
-        android:strokeColor="#000000"
-        android:strokeWidth="12"
+        android:pathData="M48,58 m-16,0 a16,16 0 1 1,32 0 a16,16 0 1 1,-32 0"
+        android:strokeColor="@android:color/system_accent1_600"
+        android:strokeWidth="10"
         android:fillColor="#00000000"
         android:strokeLineCap="round"
         android:strokeLineJoin="round"/>
 
     <!-- Key shaft -->
     <path
-        android:pathData="M42,54 L42,82"
-        android:strokeColor="#000000"
-        android:strokeWidth="12"
+        android:pathData="M48,74 L48,96"
+        android:strokeColor="@android:color/system_accent1_600"
+        android:strokeWidth="10"
         android:fillColor="#00000000"
         android:strokeLineCap="round"/>
 
     <!-- Key teeth -->
     <path
-        android:pathData="M48,62 L58,62"
-        android:strokeColor="#000000"
-        android:strokeWidth="10"
+        android:pathData="M53,82 L61,82"
+        android:strokeColor="@android:color/system_accent1_600"
+        android:strokeWidth="8"
         android:fillColor="#00000000"
         android:strokeLineCap="round"/>
     <path
-        android:pathData="M48,70 L58,70"
-        android:strokeColor="#000000"
-        android:strokeWidth="10"
-        android:fillColor="#00000000"
-        android:strokeLineCap="round"/>
-    <path
-        android:pathData="M48,78 L58,78"
-        android:strokeColor="#000000"
-        android:strokeWidth="10"
+        android:pathData="M53,89 L61,89"
+        android:strokeColor="@android:color/system_accent1_600"
+        android:strokeWidth="8"
         android:fillColor="#00000000"
         android:strokeLineCap="round"/>
 
     <!-- Shatter fragments -->
     <path
-        android:pathData="M68,20 L88,35 L95,25 L105,42"
-        android:strokeColor="#000000"
-        android:strokeWidth="10"
+        android:pathData="M65,26 L80,38 L87,30 L95,42"
+        android:strokeColor="@android:color/system_accent1_600"
+        android:strokeWidth="8"
         android:fillColor="#00000000"
         android:strokeLineCap="round"
         android:strokeLineJoin="round"/>
     <path
-        android:pathData="M88,35 L97,50"
-        android:strokeColor="#000000"
-        android:strokeWidth="10"
+        android:pathData="M80,38 L88,50"
+        android:strokeColor="@android:color/system_accent1_600"
+        android:strokeWidth="8"
         android:fillColor="#00000000"
         android:strokeLineCap="round"/>
 </vector>
