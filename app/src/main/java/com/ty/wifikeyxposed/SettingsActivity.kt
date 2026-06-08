@@ -132,6 +132,13 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
     var hideToolTarget30 by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_target30", false)) }
     var hideToolArea by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_area", false)) }
 
+    // WiFi 防护状态
+    var blockWifiClearConfig by remember(tick) { mutableStateOf(prefs.getBoolean("block_wifi_clear_config", false)) }
+    var blockWifiDeleteModel by remember(tick) { mutableStateOf(prefs.getBoolean("block_wifi_delete_model", false)) }
+    var blockWifiPostClean by remember(tick) { mutableStateOf(prefs.getBoolean("block_wifi_post_clean", false)) }
+    var bypassQsGuide by remember(tick) { mutableStateOf(prefs.getBoolean("bypass_qs_guide", false)) }
+    var bypassOverlayGuide by remember(tick) { mutableStateOf(prefs.getBoolean("bypass_overlay_guide", false)) }
+
     // 底栏精简状态
     var hideHome by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_home", false)) }
     var hideNearby by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_nearby", false)) }
@@ -147,6 +154,7 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
     var hideBus by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_bus", false)) }
     var hideFilm by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_film", false)) }
     var hideAi by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_ai", false)) }
+    var hideKouxin by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_kouxin", false)) }
 
     // 对话框状态
     var showHomeWarning by remember { mutableStateOf(false) }
@@ -154,7 +162,7 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
 
     val allSelected = blockNews && unlockVip && deepCleanVip && removeAds && liteTeenager && removeCloudControl &&
             hideNearby && hideVideo && hideWelfare && hideIm && hideWeb && hideGuard &&
-            hideDeepseek && hideShopmall && hideBus && hideFilm && hideAi &&
+            hideDeepseek && hideShopmall && hideBus && hideFilm && hideAi && hideKouxin &&
             hideToolClean && hideToolSpeedup && hideToolCooling && hideToolSpeedtest &&
             hideToolNetwork && hideToolSecurity && hideToolKuaikan && hideToolNovel && hideToolGame && hideToolMore &&
             hideToolVip && hideToolUser && hideToolIm && hideToolEmpower && hideToolDynamicCard && hideToolTarget30 && hideToolArea
@@ -190,6 +198,7 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                         hideBus = target
                         hideFilm = target
                         hideAi = target
+                        hideKouxin = target
 
                         hideToolClean = target
                         hideToolSpeedup = target
@@ -228,6 +237,7 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                             putBoolean("hide_tab_bus", target)
                             putBoolean("hide_tab_film", target)
                             putBoolean("hide_tab_ai", target)
+                            putBoolean("hide_tab_kouxin", target)
 
                             putBoolean("hide_tool_clean", target)
                             putBoolean("hide_tool_speedup", target)
@@ -482,6 +492,14 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                         checked = hideAi,
                         onCheckedChange = { hideAi = it; prefs.edit().putBoolean("hide_tab_ai", it).apply() }
                     )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "精简逛逛",
+                        subtitle = "隐藏逛逛社交入口",
+                        icon = Icons.Default.Chat,
+                        checked = hideKouxin,
+                        onCheckedChange = { hideKouxin = it; prefs.edit().putBoolean("hide_tab_kouxin", it).apply() }
+                    )
                 }
             }
 
@@ -633,6 +651,61 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                         icon = Icons.Default.Warning,
                         checked = hideToolTarget30,
                         onCheckedChange = { hideToolTarget30 = it; prefs.edit().putBoolean("hide_tool_target30", it).apply() }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Text(
+                "WiFi 防护 (阻止静默操作)",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 8.dp, start = 8.dp)
+            )
+
+            ElevatedCard(
+                shape = MaterialTheme.shapes.extraLarge,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(8.dp)) {
+                    SettingItem(
+                        title = "阻止连接前清除网络",
+                        subtitle = "拦截连接 WiFi 前静默删除 App 自建网络配置的行为",
+                        icon = Icons.Default.Wifi,
+                        checked = blockWifiClearConfig,
+                        onCheckedChange = { blockWifiClearConfig = it; prefs.edit().putBoolean("block_wifi_clear_config", it).apply() }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "阻止先删后加模式",
+                        subtitle = "拦截连接时先删除旧配置再添加新配置的 useDeleteModel 行为",
+                        icon = Icons.Default.Block,
+                        checked = blockWifiDeleteModel,
+                        onCheckedChange = { blockWifiDeleteModel = it; prefs.edit().putBoolean("block_wifi_delete_model", it).apply() }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "阻止失败后清理配置",
+                        subtitle = "拦截连接失败后静默清理 WiFi 网络配置的行为",
+                        icon = Icons.Default.CleaningServices,
+                        checked = blockWifiPostClean,
+                        onCheckedChange = { blockWifiPostClean = it; prefs.edit().putBoolean("block_wifi_post_clean", it).apply() }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "跳过 QS 磁贴引导",
+                        subtitle = "连接 WiFi 时跳过「添加快速设置磁贴」引导弹窗，直接连接",
+                        icon = Icons.Default.Speed,
+                        checked = bypassQsGuide,
+                        onCheckedChange = { bypassQsGuide = it; prefs.edit().putBoolean("bypass_qs_guide", it).apply() }
+                    )
+                    SettingItem(
+                        title = "跳过悬浮窗权限引导",
+                        subtitle = "连接 WiFi 时跳过「授予悬浮窗权限」引导弹窗，直接连接",
+                        icon = Icons.Default.Layers,
+                        checked = bypassOverlayGuide,
+                        onCheckedChange = { bypassOverlayGuide = it; prefs.edit().putBoolean("bypass_overlay_guide", it).apply() }
                     )
                 }
             }

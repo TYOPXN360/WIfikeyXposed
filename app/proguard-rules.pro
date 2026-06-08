@@ -14,3 +14,11 @@
 
 # MultiDex
 -keep class androidx.multidex.** { *; }
+
+# Keep launcher icon resources
+-keepclassmembers class **.R$mipmap {
+    <fields>;
+}
+-keepclassmembers class **.R$drawable {
+    <fields>;
+}

@@ -107,6 +107,8 @@ public class MainHook extends XposedModule {
             hookCloudControl(classLoader);
             hookBottomNavigation(classLoader);
             hookHomeWidgets(classLoader);
+            hookWifiSilentDelete(classLoader);
+            hookQuickSettingsBypass(classLoader);
         } catch (Throwable e) {
             log(6, TAG, "Initialization error: " + e.getMessage());
         }
@@ -233,6 +235,7 @@ public class MainHook extends XposedModule {
             case "bus": return "hide_tab_bus";
             case "film": return "hide_tab_film";
             case "ai": return "hide_tab_ai";
+            case "kouxin": return "hide_tab_kouxin";
             default: return null;
         }
     }
@@ -247,6 +250,7 @@ public class MainHook extends XposedModule {
             case "navigation_web": return "hide_tab_web";
             case "navigation_guard": return "hide_tab_guard";
             case "navigation_me": return "hide_tab_me";
+            case "navigation_kouxin": return "hide_tab_kouxin";
             default: return null;
         }
     }
@@ -259,7 +263,7 @@ public class MainHook extends XposedModule {
             String[] tabNames = {
                 "navigation_home", "navigation_nearby", "navigation_video", 
                 "navigation_welfare", "navigation_im", "navigation_web", 
-                "navigation_guard", "navigation_me"
+                "navigation_guard", "navigation_me", "navigation_kouxin"
             };
             
             for (String name : tabNames) {
@@ -1011,6 +1015,164 @@ public class MainHook extends XposedModule {
                 }
             });
         } catch (Exception ignored) {}
+    }
+
+    /**
+     * 拦截 WiFi 万能钥匙静默删除网络配置的行为
+     * 1. block_wifi_clear_config: 连接前静默清除 App 配置的 WiFi 网络 (Companion.a)
+     * 2. block_wifi_delete_model: 连接时先删后加的 useDeleteModel 模式 (x1.f)
+     * 3. block_wifi_post_clean: 连接失败后静默清理 WiFi 配置 (x1.n)
+     */
+    private void hookWifiSilentDelete(ClassLoader classLoader) {
+        try {
+            Class<?> x1Cls = classLoader.loadClass("com.wifitutu.link.feature.wifi.x1");
+            Class<?> companionCls = classLoader.loadClass("com.wifitutu.link.feature.wifi.x1$a");
+
+            // Hook 1: 拦截 Companion.a(clearAppConfiged, ignoreWifiId)
+            // 该方法在连接 WiFi 前会静默删除所有 App 自建的网络配置
+            try {
+                Method clearMethod = null;
+                for (Method m : companionCls.getDeclaredMethods()) {
+                    if (m.getName().equals("a") && m.getParameterCount() == 2
+                            && m.getParameterTypes()[0] == boolean.class) {
+                        clearMethod = m;
+                        break;
+                    }
+                }
+                if (clearMethod != null) {
+                    final Method m = clearMethod;
+                    hook(m).intercept(chain -> {
+                        if (isFeatureEnabled("block_wifi_clear_config", false)) {
+                            log(4, TAG, "Blocked: Companion.a (clearAppConfiged) — 阻止连接前静默清除网络配置");
+                            chain.getArgs().set(0, false);
+                        }
+                        return chain.proceed();
+                    });
+                    log(4, TAG, "Hooked: x1$a.a(clearAppConfiged)");
+                }
+            } catch (Exception e) {
+                log(6, TAG, "Failed to hook x1$a.a: " + e.getMessage());
+            }
+
+            // Hook 2: 拦截 x1.f() 中的 useDeleteModel 行为
+            // 该方法在连接 WiFi 时会先删除旧配置再添加新配置
+            try {
+                Class<?> y2Cls = classLoader.loadClass("oz.y2");
+                Class<?> wifiKeyModeCls = classLoader.loadClass("com.wifitutu.link.foundation.kernel.WIFI_KEY_MODE");
+                Method fMethod = x1Cls.getDeclaredMethod("f", y2Cls, wifiKeyModeCls);
+
+                hook(fMethod).intercept(chain -> {
+                    if (isFeatureEnabled("block_wifi_delete_model", false)) {
+                        try {
+                            Object x1Instance = chain.getThisObject();
+                            Field useDeleteField = x1Cls.getDeclaredField("useDeleteModel");
+                            useDeleteField.setAccessible(true);
+                            useDeleteField.set(x1Instance, false);
+                            log(4, TAG, "Blocked: x1.f() useDeleteModel — 禁止先删后加连接模式");
+                        } catch (Exception e) {
+                            log(6, TAG, "Failed to disable useDeleteModel: " + e.getMessage());
+                        }
+                    }
+                    return chain.proceed();
+                });
+                log(4, TAG, "Hooked: x1.f() (useDeleteModel control)");
+            } catch (Exception e) {
+                log(6, TAG, "Failed to hook x1.f: " + e.getMessage());
+            }
+
+            // Hook 3: 拦截 x1.n() — 连接失败后静默清理 WiFi 配置
+            try {
+                Method nMethod = x1Cls.getDeclaredMethod("n");
+
+                hook(nMethod).intercept(chain -> {
+                    if (isFeatureEnabled("block_wifi_post_clean", false)) {
+                        log(4, TAG, "Blocked: x1.n() — 阻止连接失败后静默清理网络配置");
+                        return null;
+                    }
+                    return chain.proceed();
+                });
+                log(4, TAG, "Hooked: x1.n() (post-connect cleanup)");
+            } catch (Exception e) {
+                log(6, TAG, "Failed to hook x1.n: " + e.getMessage());
+            }
+        } catch (Exception e) {
+            log(6, TAG, "Failed to hook WiFi silent delete: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 绕过 QS 磁贴添加引导弹窗
+     * 
+     * 拦截流程分析：
+     * 1. ConnectHandler.P() / HomeAction 调用 u3.b().Im(proc)
+     * 2. f0.Im() 检查 ku() — 如果 QS 磁贴已添加则直接 proc.invoke() 继续连接
+     * 3. 若 ku() 返回 false → 弹出 APP_QUICK_SETTINGS_GUIDE_BEFORE_CONNECT 引导弹窗
+     * 4. 弹窗回调中检查 q7$b.Gb() — 已添加则继续，否则"连接取消"
+     * 
+     * Hook 策略：
+     * - 主 Hook: com.wifitutu.widget.qs.feature.a.ku() → 始终返回 true (跳过弹窗)
+     * - 安全网: com.wifitutu.widget.qs.mgr.a.Gb() → 始终返回 true (兜底弹窗回调)
+     */
+    private void hookQuickSettingsBypass(ClassLoader classLoader) {
+        // 主 Hook: ku() 检查 QS 磁贴是否已添加 → 始终返回 true
+        try {
+            Class<?> qsFeatureCls = classLoader.loadClass("com.wifitutu.widget.qs.feature.a");
+            Method kuMethod = qsFeatureCls.getDeclaredMethod("ku");
+            hook(kuMethod).intercept(chain -> {
+                if (isFeatureEnabled("bypass_qs_guide", false)) {
+                    log(4, TAG, "Bypassed QS tile check (ku) → true");
+                    return true;
+                }
+                return chain.proceed();
+            });
+            log(4, TAG, "Hooked: qs.feature.a.ku() (QS tile added check)");
+        } catch (Exception e) {
+            log(6, TAG, "Failed to hook ku(): " + e.getMessage());
+        }
+
+        // 安全网: qs.mgr.a.Gb() — 弹窗回调中的二次检查
+        try {
+            Class<?> qsMgrCls = classLoader.loadClass("com.wifitutu.widget.qs.mgr.a");
+            Method gbMethod = qsMgrCls.getDeclaredMethod("Gb");
+            hook(gbMethod).intercept(chain -> {
+                if (isFeatureEnabled("bypass_qs_guide", false)) {
+                    log(4, TAG, "Bypassed QS guide check (Gb) → true");
+                    return true;
+                }
+                return chain.proceed();
+            });
+            log(4, TAG, "Hooked: qs.mgr.a.Gb() (QS guide dialog callback)");
+        } catch (Exception e) {
+            log(6, TAG, "Failed to hook Gb(): " + e.getMessage());
+        }
+
+        // 悬浮窗权限绕过: Hook permission.c.B0()，对 SYSTEM_ALERT_WINDOW 直接返回 true
+        try {
+            Class<?> permCheckerCls = classLoader.loadClass("com.wifitutu.link.foundation.kernel.permission.c");
+            Method b0Method = permCheckerCls.getMethod("B0",
+                    classLoader.loadClass("com.wifitutu.link.foundation.kernel.f6"));
+            hook(b0Method).intercept(chain -> {
+                if (isFeatureEnabled("bypass_overlay_guide", false)) {
+                    try {
+                        Object f6Obj = chain.getArgs().get(0);
+                        // f6 的 target 字段存着权限 ID (混淆后字段名 "a")
+                        Field targetField = f6Obj.getClass().getDeclaredField("a");
+                        targetField.setAccessible(true);
+                        String target = (String) targetField.get(f6Obj);
+                        if ("android:system_alert_window".equals(target)) {
+                            log(4, TAG, "Spoofed B0(SYSTEM_ALERT_WINDOW) → true");
+                            return true;
+                        }
+                    } catch (Exception ex) {
+                        log(6, TAG, "B0() field access error: " + ex.getMessage());
+                    }
+                }
+                return chain.proceed();
+            });
+            log(4, TAG, "Hooked: permission.c.B0() (overlay permission bypass)");
+        } catch (Exception e) {
+            log(6, TAG, "Failed to hook permission.c.B0(): " + e.getMessage());
+        }
     }
 
     private View getFieldSafe(Object obj, String name) {

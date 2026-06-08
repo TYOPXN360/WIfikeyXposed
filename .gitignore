@@ -26,3 +26,6 @@ tools/
 deploy_and_log.sh
 keystore.properties
 wifikeyxposed.keystore
+.agents/
+.codegraph/
+AGENTS.md
