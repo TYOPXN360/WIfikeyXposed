@@ -227,6 +227,12 @@ public class MainHook extends XposedModule {
             case "im": return "hide_tab_im";
             case "guard": return "hide_tab_guard";
             case "mine": return "hide_tab_me";
+            // v5.2.18 新增底栏 Tab
+            case "deepseek": return "hide_tab_deepseek";
+            case "shopmall": return "hide_tab_shopmall";
+            case "bus": return "hide_tab_bus";
+            case "film": return "hide_tab_film";
+            case "ai": return "hide_tab_ai";
             default: return null;
         }
     }

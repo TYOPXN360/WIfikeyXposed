@@ -141,6 +141,12 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
     var hideWeb by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_web", false)) }
     var hideGuard by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_guard", false)) }
     var hideMe by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_me", false)) }
+    // v5.2.18 新增底栏 Tab
+    var hideDeepseek by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_deepseek", false)) }
+    var hideShopmall by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_shopmall", false)) }
+    var hideBus by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_bus", false)) }
+    var hideFilm by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_film", false)) }
+    var hideAi by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_ai", false)) }
 
     // 对话框状态
     var showHomeWarning by remember { mutableStateOf(false) }
@@ -148,6 +154,7 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
 
     val allSelected = blockNews && unlockVip && deepCleanVip && removeAds && liteTeenager && removeCloudControl &&
             hideNearby && hideVideo && hideWelfare && hideIm && hideWeb && hideGuard &&
+            hideDeepseek && hideShopmall && hideBus && hideFilm && hideAi &&
             hideToolClean && hideToolSpeedup && hideToolCooling && hideToolSpeedtest &&
             hideToolNetwork && hideToolSecurity && hideToolKuaikan && hideToolNovel && hideToolGame && hideToolMore &&
             hideToolVip && hideToolUser && hideToolIm && hideToolEmpower && hideToolDynamicCard && hideToolTarget30 && hideToolArea
@@ -178,6 +185,11 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                         hideIm = target
                         hideWeb = target
                         hideGuard = target
+                        hideDeepseek = target
+                        hideShopmall = target
+                        hideBus = target
+                        hideFilm = target
+                        hideAi = target
 
                         hideToolClean = target
                         hideToolSpeedup = target
@@ -211,6 +223,11 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                             putBoolean("hide_tab_im", target)
                             putBoolean("hide_tab_web", target)
                             putBoolean("hide_tab_guard", target)
+                            putBoolean("hide_tab_deepseek", target)
+                            putBoolean("hide_tab_shopmall", target)
+                            putBoolean("hide_tab_bus", target)
+                            putBoolean("hide_tab_film", target)
+                            putBoolean("hide_tab_ai", target)
 
                             putBoolean("hide_tool_clean", target)
                             putBoolean("hide_tool_speedup", target)
@@ -423,6 +440,47 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                         icon = Icons.Default.Person,
                         checked = hideMe,
                         onCheckedChange = { if (it) showMeWarning = true else { hideMe = false; prefs.edit().putBoolean("hide_tab_me", false).apply() } }
+                    )
+                    // v5.2.18 新增底栏 Tab
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "精简 DeepSeek AI",
+                        subtitle = "隐藏 AI 对话助手入口",
+                        icon = Icons.Default.Psychology,
+                        checked = hideDeepseek,
+                        onCheckedChange = { hideDeepseek = it; prefs.edit().putBoolean("hide_tab_deepseek", it).apply() }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "精简商城",
+                        subtitle = "隐藏电商购物入口",
+                        icon = Icons.Default.ShoppingCart,
+                        checked = hideShopmall,
+                        onCheckedChange = { hideShopmall = it; prefs.edit().putBoolean("hide_tab_shopmall", it).apply() }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "精简公交出行",
+                        subtitle = "隐藏公交出行服务入口",
+                        icon = Icons.Default.DirectionsBus,
+                        checked = hideBus,
+                        onCheckedChange = { hideBus = it; prefs.edit().putBoolean("hide_tab_bus", it).apply() }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "精简电影",
+                        subtitle = "隐藏电影购票入口",
+                        icon = Icons.Default.Movie,
+                        checked = hideFilm,
+                        onCheckedChange = { hideFilm = it; prefs.edit().putBoolean("hide_tab_film", it).apply() }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "精简 AI 连接",
+                        subtitle = "隐藏 AI 智能连接入口",
+                        icon = Icons.Default.AutoAwesome,
+                        checked = hideAi,
+                        onCheckedChange = { hideAi = it; prefs.edit().putBoolean("hide_tab_ai", it).apply() }
                     )
                 }
             }
