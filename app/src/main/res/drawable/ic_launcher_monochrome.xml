@@ -5,7 +5,7 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- WiFi arcs (3 arcs, bottom half, centered above key) -->
+    <!-- WiFi arcs (3 arcs, bottom half) -->
     <path
         android:pathData="M96,72 a18,18 0 0 0 -18,-18"
         android:strokeColor="#000000"
@@ -25,7 +25,7 @@
         android:fillColor="#00000000"
         android:strokeLineCap="round"/>
 
-    <!-- Key head (circle) -->
+    <!-- Key head (stroke circle) -->
     <path
         android:pathData="M42,34 m-20,0 a20,20 0 1 1,40 0 a20,20 0 1 1,-40 0"
         android:strokeColor="#000000"
@@ -34,7 +34,7 @@
         android:strokeLineCap="round"
         android:strokeLineJoin="round"/>
 
-    <!-- Key shaft (vertical) -->
+    <!-- Key shaft -->
     <path
         android:pathData="M42,54 L42,82"
         android:strokeColor="#000000"
@@ -42,7 +42,7 @@
         android:fillColor="#00000000"
         android:strokeLineCap="round"/>
 
-    <!-- Key teeth (3 horizontal notches) -->
+    <!-- Key teeth -->
     <path
         android:pathData="M48,62 L58,62"
         android:strokeColor="#000000"
@@ -62,7 +62,7 @@
         android:fillColor="#00000000"
         android:strokeLineCap="round"/>
 
-    <!-- Shatter fragments (zigzag) -->
+    <!-- Shatter fragments -->
     <path
         android:pathData="M68,20 L88,35 L95,25 L105,42"
         android:strokeColor="#000000"
