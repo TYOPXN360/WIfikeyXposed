@@ -4,7 +4,7 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Monet 背景色 -->
+    <!-- Monet 纯色背景 -->
     <path
         android:pathData="M0,0h108v108H0z"
         android:fillColor="#6750A4"/>
