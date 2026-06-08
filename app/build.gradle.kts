@@ -9,7 +9,7 @@ android {
 
     defaultConfig {
         applicationId = "com.ty.wifikeyxposed"
-        minSdk = 31
+        minSdk = 30
         targetSdk = 36
         versionCode = 2
         versionName = "1.1"
@@ -52,7 +52,6 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     implementation(libs.androidx.material.icons.extended)
-    implementation("androidx.multidex:multidex:2.0.1")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
