@@ -118,6 +118,7 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
     var unlockVip by remember(tick) { mutableStateOf(prefs.getBoolean("unlock_vip", false)) }
     var deepCleanVip by remember(tick) { mutableStateOf(prefs.getBoolean("deep_clean_vip", false)) }
     var removeAds by remember(tick) { mutableStateOf(prefs.getBoolean("remove_ads", false)) }
+    var blockCoinTaskBall by remember(tick) { mutableStateOf(prefs.getBoolean("block_coin_task_ball", false)) }
     var liteTeenager by remember(tick) { mutableStateOf(prefs.getBoolean("lite_teenager", false)) }
     var removeCloudControl by remember(tick) { mutableStateOf(prefs.getBoolean("remove_cloud_control", false)) }
 
@@ -168,7 +169,7 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
     var showHomeWarning by remember { mutableStateOf(false) }
     var showMeWarning by remember { mutableStateOf(false) }
 
-    val allSelected = blockNews && unlockVip && deepCleanVip && removeAds && liteTeenager && removeCloudControl &&
+    val allSelected = blockNews && unlockVip && deepCleanVip && removeAds && blockCoinTaskBall && liteTeenager && removeCloudControl &&
             hideNearby && hideVideo && hideWelfare && hideIm && hideWeb && hideGuard &&
             hideDeepseek && hideShopmall && hideBus && hideFilm && hideAi && hideKouxin &&
             hideToolClean && hideToolSpeedup && hideToolCooling && hideToolSpeedtest &&
@@ -192,6 +193,7 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                         unlockVip = target
                         deepCleanVip = target
                         removeAds = target
+                        blockCoinTaskBall = target
                         liteTeenager = target
                         removeCloudControl = target
                         
@@ -231,6 +233,7 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                             putBoolean("unlock_vip", target)
                             putBoolean("deep_clean_vip", target)
                             putBoolean("remove_ads", target)
+                            putBoolean("block_coin_task_ball", target)
                             putBoolean("lite_teenager", target)
                             putBoolean("remove_cloud_control", target)
                             
@@ -651,6 +654,14 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                         icon = Icons.Default.FeaturedPlayList,
                         checked = hideToolDynamicCard,
                         onCheckedChange = { hideToolDynamicCard = it; prefs.edit().putBoolean("hide_tool_dynamic_card", it).apply() }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "屏蔽签到浮球",
+                        subtitle = "隐藏主页右下角的「签到领现金」浮动广告球",
+                        icon = Icons.Default.Ballot,
+                        checked = blockCoinTaskBall,
+                        onCheckedChange = { blockCoinTaskBall = it; prefs.edit().putBoolean("block_coin_task_ball", it).apply() }
                     )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     SettingItem(

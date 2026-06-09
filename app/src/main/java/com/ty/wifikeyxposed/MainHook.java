@@ -24,6 +24,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Process;
+import android.view.ViewGroup;
 import android.view.View;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -109,6 +110,7 @@ public class MainHook extends XposedModule {
             hookHomeWidgets(classLoader);
             hookWifiSilentDelete(classLoader);
             hookQuickSettingsBypass(classLoader);
+            hookFloatingBall(classLoader);
         } catch (Throwable e) {
             log(6, TAG, "Initialization error: " + e.getMessage());
         }
@@ -829,23 +831,25 @@ public class MainHook extends XposedModule {
     }
 
     private void hookVipStatus(ClassLoader classLoader) {
+        if (!isFeatureEnabled("unlock_vip", false)) return;
+
+        // v2 策略: 对所有 VIP 类的方法做泛化拦截 + l5.c/d 精确 hook
+        // int→2, boolean→true/false, long→2035年, enum→SVIP/YEAR
+
         final XposedInterface.Hooker vipMethodHooker = new XposedInterface.Hooker() {
             @Override
             public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable {
-                if (!isFeatureEnabled("unlock_vip", false)) return chain.proceed();
-
                 Method m = (Method) chain.getExecutable();
                 Class<?> returnType = m.getReturnType();
                 String name = m.getName();
-                
                 if (m.getParameterCount() == 0) {
                     if (returnType == int.class || returnType == Integer.class) {
                         if (name.equals("getIndex")) return chain.proceed();
-                        return 2; 
+                        return 2;
                     }
                     if (returnType == boolean.class || returnType == Boolean.class) {
-                        if (name.equals("Ao")) return false; 
-                        if (name.equals("I2")) return true;  
+                        if (name.equals("Ao")) return false;
+                        if (name.equals("I2")) return true;
                         if (name.toLowerCase().contains("expired") || name.equals("n")) return false;
                         return true;
                     }
@@ -874,11 +878,8 @@ public class MainHook extends XposedModule {
             @Override
             public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable {
                 Object result = chain.proceed();
-                if (!isFeatureEnabled("unlock_vip", false)) return result;
-
                 Object obj = chain.getThisObject();
                 if (obj == null) return result;
-                
                 Class<?> curr = obj.getClass();
                 while (curr != null && !curr.getName().equals("java.lang.Object")) {
                     for (Field f : curr.getDeclaredFields()) {
@@ -901,18 +902,30 @@ public class MainHook extends XposedModule {
             }
         };
 
+        // VIP 类列表 (仅包含当前 APK 中存在的类)
         String[] vipClasses = {
-            "py.a", "py.b", "w40.f", "w40.g", "j50.a", "j50.b", "ly.b", "i50.g", "l5",
             "com.wifitutu.link.foundation.native_.model.generate.vip.BridgeUserVipInfo",
-            "mz.f", "i50.d", "i50.e", "i50.b", "i50.l", "m50.g", "ry.b", "fz.m2", "g50.w", "m50.i",
-            "com.wifitutu.movie.core.utils.a", "com.wifitutu.link.foundation.sdk.k1",
-            "com.wifitutu.link.foundation.sdk.i1", "com.wifitutu.user.imp.j", "com.wifitutu.widget.core.j",
-            "com.wifitutu.widget.core.k9", "com.wifitutu.link.foundation.core.k0",
+            "com.wifitutu.link.foundation.native_.model.generate.user.BridgeUserInfo",
+            "com.wifitutu.widget.core.n9",
+            "com.wifitutu.link.foundation.core.n5",
             "com.wifitutu.link.foundation.react_native.core.VipItemInfo",
             "com.wifitutu.link.foundation.webengine.plugin.VipItemInfo",
-            "com.wifitutu.link.foundation.native_.model.generate.user.BridgeUserInfo"
+            "com.wifitutu.vip.imp.MovieVipBagManager",
+            "com.wifitutu.vip.imp.VipUserBagManager",
+            "com.wifitutu.vip.imp.VipConfigManager",
+            "com.wifitutu.vip.imp.VipManager",
+            "com.wifitutu.link.foundation.sdk.i1",
+            "com.wifitutu.user.imp.j",
+            "com.wifitutu.widget.core.j",
+            "com.wifitutu.widget.core.k9",
+            "com.wifitutu.link.foundation.core.k0",
+            "com.wifitutu.movie.core.utils.a",
+            "py.a", "py.b", "j50.a", "j50.b", "ly.b", "i50.g",
+            "i50.d", "i50.e", "i50.b", "ry.b",
+            "uy.a", "uy.b"
         };
-        
+
+        int hookedCount = 0;
         for (String clsName : vipClasses) {
             try {
                 Class<?> clazz = classLoader.loadClass(clsName);
@@ -924,25 +937,48 @@ public class MainHook extends XposedModule {
                 for (Constructor<?> c : clazz.getDeclaredConstructors()) {
                     hook(c).intercept(vipConstructorHooker);
                 }
+                hookedCount++;
             } catch (Throwable ignored) {}
         }
 
+        // ★ 关键: l5.c() / l5.d() — VIP/SVIP 最终判断入口
+        try {
+            Class<?> l5Cls = classLoader.loadClass("com.wifitutu.link.foundation.core.l5");
+            for (Method m : l5Cls.getDeclaredMethods()) {
+                String name = m.getName();
+                if (name.equals("d") && m.getParameterCount() == 1 && m.getReturnType() == boolean.class) {
+                    hook(m).intercept(chain -> {
+                        log(4, TAG, "Spoofed l5.d(isVIP) → true");
+                        return true;
+                    });
+                    log(4, TAG, "Hooked l5.d() (isVIP check)");
+                } else if (name.equals("c") && m.getParameterCount() == 1 && m.getReturnType() == boolean.class) {
+                    hook(m).intercept(chain -> {
+                        log(4, TAG, "Spoofed l5.c(isSVIP) → true");
+                        return true;
+                    });
+                    log(4, TAG, "Hooked l5.c() (isSVIP check)");
+                }
+            }
+        } catch (Throwable e) {
+            log(6, TAG, "l5 hook failed: " + e.getMessage());
+        }
+
+        // j5 静态方法
         try {
             Class<?> j5Class = classLoader.loadClass("com.wifitutu.link.foundation.core.j5");
             for (Method m : j5Class.getDeclaredMethods()) {
                 if (Modifier.isStatic(m.getModifiers()) && (m.getReturnType() == boolean.class || m.getReturnType() == Boolean.class)) {
-                    hook(m).intercept(new XposedInterface.Hooker() {
-                        @Override
-                        public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable {
-                            if (!isFeatureEnabled("unlock_vip", false)) return chain.proceed();
-                            String name = chain.getExecutable().getName();
-                            if (name.equals("c") || name.equals("d")) return true; 
-                            return chain.proceed();
-                        }
+                    hook(m).intercept(chain -> {
+                        String name = chain.getExecutable().getName();
+                        if (name.equals("c") || name.equals("d")) return true;
+                        return chain.proceed();
                     });
                 }
             }
         } catch (Throwable ignored) {}
+
+        log(4, TAG, "Hooked " + hookedCount + " VIP classes + l5.c/d");
     }
 
     private void hookStorage(ClassLoader classLoader) {
@@ -1174,6 +1210,52 @@ public class MainHook extends XposedModule {
             log(6, TAG, "Failed to hook permission.c.B0(): " + e.getMessage());
         }
     }
+
+    /**
+     * 屏蔽主界面"签到领现金"广告气泡 BubbleView
+     * 
+     * com.wifitutu.ui.bubble.BubbleView — 主界面广告浮球
+     * showBubbleIfOrNot(int tab) 控制显示，void 方法
+     * refreshBubbleView() 内部调 setVisibility(VISIBLE) 显示
+     * 
+     * 策略: 拦截 showBubbleIfOrNot → 直接 return，不执行刷新逻辑
+     */
+    private void hookFloatingBall(ClassLoader classLoader) {
+        if (!isFeatureEnabled("block_coin_task_ball", false)) return;
+
+        try {
+            Class<?> bubbleViewCls = classLoader.loadClass("com.wifitutu.ui.bubble.BubbleView");
+
+            // 拦截 showBubbleIfOrNot — 直接 return，不设置 currentTab 也不调 refreshBubbleView
+            for (Method m : bubbleViewCls.getDeclaredMethods()) {
+                if (m.getName().equals("showBubbleIfOrNot")) {
+                    hook(m).intercept(chain -> {
+                        log(4, TAG, "Blocked BubbleView.showBubbleIfOrNot() — 广告气泡已屏蔽");
+                        return null; // void 方法，直接返回
+                    });
+                    log(4, TAG, "Hooked BubbleView.showBubbleIfOrNot()");
+                    break;
+                }
+            }
+
+            // 拦截 fetchData — 阻止广告数据加载，避免网络请求浪费
+            for (Method m : bubbleViewCls.getDeclaredMethods()) {
+                if (m.getName().equals("fetchData")) {
+                    hook(m).intercept(chain -> {
+                        log(4, TAG, "Blocked BubbleView.fetchData() — 跳过广告数据加载");
+                        return null; // void 方法
+                    });
+                    log(4, TAG, "Hooked BubbleView.fetchData()");
+                    break;
+                }
+            }
+
+        } catch (Exception e) {
+            log(6, TAG, "Failed to hook BubbleView: " + e.getMessage());
+        }
+    }
+
+
 
     private View getFieldSafe(Object obj, String name) {
         try {

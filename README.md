@@ -2,7 +2,7 @@
 
 WiFi万能钥匙 5.2.18 的 Xposed 模块，提供本地 SVIP 永久解锁、全模块去广告、底栏/工具栏精简、WiFi 防护等功能。
 
-[![Latest Release](https://img.shields.io/badge/最新版本-v1.5-blue)](https://github.com/TYOPXN360/WIfikeyXposed/releases/latest)
+[![Latest Release](https://img.shields.io/badge/最新版本-v1.5.1-blue)](https://github.com/TYOPXN360/WIfikeyXposed/releases/latest)
 [![Downloads](https://img.shields.io/badge/平台-Android_11%2B-green)](https://github.com/TYOPXN360/WIfikeyXposed/releases)
 
 ## ⚠️ 代码生成说明
@@ -17,6 +17,7 @@ WiFi万能钥匙 5.2.18 的 Xposed 模块，提供本地 SVIP 永久解锁、全
 - **云控去除**：移除云控配置对功能的影响
 - **青少年模式增强**：优化青少年模式体验
 - **免 Root 重启**：设置界面一键重启目标应用，无需 Root 权限
+- **主页广告气泡屏蔽**：隐藏主页右下角的「签到领现金」浮动广告球
 
 ### 底栏精简
 可隐藏底部导航栏中的标签页：
@@ -48,6 +49,7 @@ WiFi万能钥匙 5.2.18 的 Xposed 模块，提供本地 SVIP 永久解锁、全
 - ✅ 模块设置界面响应流畅
 - ✅ 快捷设置绕过正常工作
 - ✅ 免 Root 重启正常工作
+- ✅ 主页广告气泡屏蔽正常工作
 
 ## 技术信息
 
