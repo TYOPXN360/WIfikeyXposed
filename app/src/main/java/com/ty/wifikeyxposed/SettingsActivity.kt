@@ -669,6 +669,12 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                 "WiFi 防护 (阻止静默操作)",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 4.dp, start = 8.dp)
+            )
+            Text(
+                "⚠️ 以下前三项为实验性功能，可能不生效",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.padding(bottom = 8.dp, start = 8.dp)
             )
 
@@ -679,7 +685,7 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                 Column(modifier = Modifier.padding(8.dp)) {
                     SettingItem(
                         title = "阻止连接前清除网络",
-                        subtitle = "拦截连接 WiFi 前静默删除 App 自建网络配置的行为",
+                        subtitle = "[实验性] 拦截连接 WiFi 前静默删除 App 自建网络配置的行为",
                         icon = Icons.Default.Wifi,
                         checked = blockWifiClearConfig,
                         onCheckedChange = { blockWifiClearConfig = it; prefs.edit().putBoolean("block_wifi_clear_config", it).apply() }
@@ -687,7 +693,7 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     SettingItem(
                         title = "阻止先删后加模式",
-                        subtitle = "拦截连接时先删除旧配置再添加新配置的 useDeleteModel 行为",
+                        subtitle = "[实验性] 拦截连接时先删除旧配置再添加新配置的 useDeleteModel 行为",
                         icon = Icons.Default.Block,
                         checked = blockWifiDeleteModel,
                         onCheckedChange = { blockWifiDeleteModel = it; prefs.edit().putBoolean("block_wifi_delete_model", it).apply() }
@@ -695,7 +701,7 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     SettingItem(
                         title = "阻止失败后清理配置",
-                        subtitle = "拦截连接失败后静默清理 WiFi 网络配置的行为",
+                        subtitle = "[实验性] 拦截连接失败后静默清理 WiFi 网络配置的行为",
                         icon = Icons.Default.CleaningServices,
                         checked = blockWifiPostClean,
                         onCheckedChange = { blockWifiPostClean = it; prefs.edit().putBoolean("block_wifi_post_clean", it).apply() }
