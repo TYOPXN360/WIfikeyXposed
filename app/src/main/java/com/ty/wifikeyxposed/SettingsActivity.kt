@@ -32,6 +32,11 @@ class SettingsActivity : ComponentActivity(), XposedServiceHelper.OnServiceListe
     private var remotePrefs by mutableStateOf<SharedPreferences?>(null)
     private var isServiceBound by mutableStateOf(false)
 
+    companion object {
+        @Volatile
+        private var cachedService: XposedService? = null
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         DynamicColors.applyToActivityIfAvailable(this)
@@ -39,6 +44,8 @@ class SettingsActivity : ComponentActivity(), XposedServiceHelper.OnServiceListe
         
         try {
             XposedServiceHelper.registerListener(this)
+            // 如果服务已经绑定过（从后台恢复），立即回调避免卡死
+            cachedService?.let { onServiceBind(it) }
         } catch (e: Exception) {
             isServiceBound = true
             remotePrefs = getSharedPreferences("settings", MODE_PRIVATE)
@@ -62,6 +69,7 @@ class SettingsActivity : ComponentActivity(), XposedServiceHelper.OnServiceListe
     }
 
     override fun onServiceBind(service: XposedService) {
+        cachedService = service
         remotePrefs = service.getRemotePreferences("settings")
         isServiceBound = true
     }
