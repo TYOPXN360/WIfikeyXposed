@@ -133,6 +133,9 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
     var hideToolNovel by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_novel", false)) }
     var hideToolGame by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_game", false)) }
     var hideToolMore by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_more", false)) }
+    var hideToolPieces by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_pieces", false)) }
+    var hideToolDouyinCoupon by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_douyin_coupon", false)) }
+    var hideToolFriendMsg by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_friend_msg", false)) }
     var hideToolVip by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_vip", false)) }
     var hideToolUser by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_user", false)) }
     var hideToolIm by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_im", false)) }
@@ -147,6 +150,7 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
     var blockWifiPostClean by remember(tick) { mutableStateOf(prefs.getBoolean("block_wifi_post_clean", false)) }
     var bypassQsGuide by remember(tick) { mutableStateOf(prefs.getBoolean("bypass_qs_guide", false)) }
     var bypassOverlayGuide by remember(tick) { mutableStateOf(prefs.getBoolean("bypass_overlay_guide", false)) }
+    var bypassAntiTamper by remember(tick) { mutableStateOf(prefs.getBoolean("bypass_anti_tamper", false)) }
 
     // 底栏精简状态
     var hideHome by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_home", false)) }
@@ -174,6 +178,7 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
             hideDeepseek && hideShopmall && hideBus && hideFilm && hideAi && hideKouxin &&
             hideToolClean && hideToolSpeedup && hideToolCooling && hideToolSpeedtest &&
             hideToolNetwork && hideToolSecurity && hideToolKuaikan && hideToolNovel && hideToolGame && hideToolMore &&
+            hideToolPieces && hideToolDouyinCoupon && hideToolFriendMsg &&
             hideToolVip && hideToolUser && hideToolIm && hideToolEmpower && hideToolDynamicCard && hideToolTarget30 && hideToolArea
             // 注意：根据要求，全选默认不包含 hideHome 和 hideMe
 
@@ -220,6 +225,9 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                         hideToolNovel = target
                         hideToolGame = target
                         hideToolMore = target
+                        hideToolPieces = target
+                        hideToolDouyinCoupon = target
+                        hideToolFriendMsg = target
                         hideToolVip = target
                         hideToolUser = target
                         hideToolIm = target
@@ -260,6 +268,9 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                             putBoolean("hide_tool_novel", target)
                             putBoolean("hide_tool_game", target)
                             putBoolean("hide_tool_more", target)
+                            putBoolean("hide_tool_pieces", target)
+                            putBoolean("hide_tool_douyin_coupon", target)
+                            putBoolean("hide_tool_friend_msg", target)
                             putBoolean("hide_tool_vip", target)
                             putBoolean("hide_tool_user", target)
                             putBoolean("hide_tool_im", target)
@@ -617,6 +628,30 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                     )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     SettingItem(
+                        title = "精简文件碎片",
+                        subtitle = "隐藏首页工具栏中的文件碎片入口",
+                        icon = Icons.Default.BrokenImage,
+                        checked = hideToolPieces,
+                        onCheckedChange = { hideToolPieces = it; prefs.edit().putBoolean("hide_tool_pieces", it).apply() }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "精简抖音优惠券",
+                        subtitle = "隐藏首页工具栏中的抖音优惠券入口",
+                        icon = Icons.Default.LocalOffer,
+                        checked = hideToolDouyinCoupon,
+                        onCheckedChange = { hideToolDouyinCoupon = it; prefs.edit().putBoolean("hide_tool_douyin_coupon", it).apply() }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "精简好友消息",
+                        subtitle = "隐藏首页工具栏中的好友消息入口",
+                        icon = Icons.Default.ChatBubble,
+                        checked = hideToolFriendMsg,
+                        onCheckedChange = { hideToolFriendMsg = it; prefs.edit().putBoolean("hide_tool_friend_msg", it).apply() }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
                         title = "精简顶部 VIP",
                         subtitle = "隐藏右上角 VIP 会员入口",
                         icon = Icons.Default.CardMembership,
@@ -731,6 +766,14 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                         icon = Icons.Default.Layers,
                         checked = bypassOverlayGuide,
                         onCheckedChange = { bypassOverlayGuide = it; prefs.edit().putBoolean("bypass_overlay_guide", it).apply() }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "绕过防篡改检测",
+                        subtitle = "屏蔽 APK 完整性校验，允许安全修改数据层",
+                        icon = Icons.Default.Security,
+                        checked = bypassAntiTamper,
+                        onCheckedChange = { bypassAntiTamper = it; prefs.edit().putBoolean("bypass_anti_tamper", it).apply() }
                     )
                 }
             }

@@ -46,7 +46,7 @@ public class MainHook extends XposedModule {
     private static final String TAG = "WiFiKeyXposed";
     private static final String TARGET_PACKAGE = "com.snda.wifilocating";
     private static final String ME_FRAGMENT_CLASS = "com.wifitutu.ui.me.MeFragment";
-    private static final String TEENAGER_MANAGER_CLASS = "com.wifitutu.link.foundation.sdk.c1";
+    private static final String TEENAGER_MANAGER_CLASS = "com.wifitutu.link.foundation.sdk.d1";
     private static final String AD_STRATEGY_CLASS = "com.wifi.business.potocol.sdk.base.strategy.AdStrategy";
     private static final String REMOTE_CONFIG_INTERFACE = "com.link.ida.sdk.protocol.api.interfaces.IWfRemoteConfig";
     private static final String URI_CHECKER_CLASS = "com.wifitutu.ui.dialog.c";
@@ -97,20 +97,34 @@ public class MainHook extends XposedModule {
         ClassLoader classLoader = param.getClassLoader();
         
         try {
-            hookRestartLogic(classLoader);
-            hookMeFragment(classLoader);
-            hookPushNotifications(classLoader);
+            log(4, TAG, "=== 开始初始化 hook ===");
             hookVipStatus(classLoader);
-            hookStorage(classLoader);
-            hookCommonFlags(classLoader);
-            hookAds(classLoader);
-            hookTeenagerMode(classLoader);
-            hookCloudControl(classLoader);
+            log(4, TAG, "hookVipStatus 完成");
             hookBottomNavigation(classLoader);
-            hookHomeWidgets(classLoader);
-            hookWifiSilentDelete(classLoader);
-            hookQuickSettingsBypass(classLoader);
+            log(4, TAG, "hookBottomNavigation 完成");
             hookFloatingBall(classLoader);
+            log(4, TAG, "hookFloatingBall 完成");
+            hookHomeWidgets(classLoader);
+            log(4, TAG, "hookHomeWidgets 完成");
+            // hookHomeDialogComponents 暂时禁用 — S1 hook 导致 NPE 崩溃
+            // TODO: 需要分析 S1 返回值类型后再启用
+            // hookHomeDialogComponents(classLoader);
+            // log(4, TAG, "hookHomeDialogComponents 完成");
+            hookAds(classLoader);
+            log(4, TAG, "hookAds 完成");
+            hookCommonFlags(classLoader);
+            log(4, TAG, "hookCommonFlags 完成");
+            hookCloudControl(classLoader);
+            log(4, TAG, "hookCloudControl 完成");
+            hookTeenagerMode(classLoader);
+            log(4, TAG, "hookTeenagerMode 完成");
+            hookAntiTamper(classLoader);
+            log(4, TAG, "hookAntiTamper 完成");
+            hookWifiSilentDelete(classLoader);
+            log(4, TAG, "hookWifiSilentDelete 完成");
+            hookQuickSettingsBypass(classLoader);
+            log(4, TAG, "hookQuickSettingsBypass 完成");
+            log(4, TAG, "=== hook 初始化完成 ===");
         } catch (Throwable e) {
             log(6, TAG, "Initialization error: " + e.getMessage());
         }
@@ -290,192 +304,241 @@ public class MainHook extends XposedModule {
     }
 
     private void hookHomeWidgets(ClassLoader classLoader) {
-        // 核心 Hook 1: 拦截工具助手类的 g() 方法 (总开关)
+        if (!isAnyToolHideEnabled()) return;
         try {
-            Class<?> toolsHelperCls = classLoader.loadClass("com.wifitutu.ui.rn.b");
-            Method gMethod = toolsHelperCls.getDeclaredMethod("g");
-            log(4, TAG, "Found toolsHelperCls.g() method");
-            hook(gMethod).intercept(chain -> {
-                boolean result = isFeatureEnabled("hide_tool_area", false);
-                log(4, TAG, "Toolbar switch g() called, hide_tool_area=" + result);
-                if (result) return false;
-                return chain.proceed();
-            });
-            log(4, TAG, "Hooked toolbar switch method g()");
-        } catch (Exception e) {
-            log(6, TAG, "Failed to hook toolsHelperCls.g(): " + e.getMessage());
-        }
-
-        // 核心 Hook 2: 拦截工具配置类 b.a() 方法 - 在数据源层面过滤toolItems
-        try {
-            Class<?> toolsConfigCls = classLoader.loadClass("com.wifitutu.widget.svc.wkconfig.config.api.generate.tools.b");
-            Class<?> q0Cls = classLoader.loadClass("com.wifitutu.link.foundation.core.q0");
-            Method aMethod = toolsConfigCls.getDeclaredMethod("a", q0Cls);
-            log(4, TAG, "Found toolsConfigCls.a() method");
-            
-            hook(aMethod).intercept(chain -> {
-                Object result = chain.proceed();
-                if (result != null) {
-                    log(4, TAG, "toolsConfigCls.a() returned HomeHeadTools object");
-                    try {
-                        Method getToolItemsMethod = result.getClass().getMethod("getToolItems");
-                        List<?> toolItems = (List<?>) getToolItemsMethod.invoke(result);
-                        if (toolItems != null) {
-                            log(4, TAG, "Original toolItems size: " + toolItems.size());
-                            List<Object> filteredList = new ArrayList<>();
-                            for (Object item : toolItems) {
-                                Method getIdMethod = item.getClass().getMethod("getId");
-                                String id = (String) getIdMethod.invoke(item);
-                                Method getNameMethod = item.getClass().getMethod("getName");
-                                String name = (String) getNameMethod.invoke(item);
-                                
-                                String prefKey = mapWidgetIdToPrefKey(id);
-                                if (prefKey == null) {
-                                    prefKey = mapOldWidgetIdToPrefKey(id);
-                                }
-                                log(4, TAG, "Tool item from config: id=" + id + ", name=" + name + ", prefKey=" + prefKey);
-                                
-                                if (prefKey != null && isFeatureEnabled(prefKey, false)) {
-                                    log(4, TAG, "Filtering tool from config: " + name + " (" + id + ")");
-                                    continue;
-                                }
-                                filteredList.add(item);
-                            }
-                            Method setToolItemsMethod = result.getClass().getMethod("setToolItems", List.class);
-                            setToolItemsMethod.invoke(result, filteredList);
-                            log(4, TAG, "Tool items filtered: " + toolItems.size() + " -> " + filteredList.size());
-                        }
-                    } catch (Exception e) {
-                        log(6, TAG, "Error filtering tool items from config: " + e.getMessage());
-                    }
-                }
-                return result;
-            });
-            log(4, TAG, "Hooked toolsConfigCls.a() method with filtering");
-        } catch (Exception e) {
-            log(6, TAG, "Failed to hook toolsConfigCls.a(): " + e.getMessage());
-        }
-
-        // 核心 Hook 3: 拦截 ConfigRnModule.Module.find() - JS读取原始配置JSON
-        try {
-            Class<?> configRnModuleCls = classLoader.loadClass("com.wifitutu.link.foundation.react_native.plugin.ConfigRnModule");
-            Class<?>[] declaredClasses = configRnModuleCls.getDeclaredClasses();
-            Class<?> moduleCls = null;
-            for (Class<?> cls : declaredClasses) {
-                if (cls.getSimpleName().equals("Module")) {
-                    moduleCls = cls;
+            Class<?> homeDialogCls = classLoader.loadClass("com.wifitutu.ui.home.HomeDialog");
+            Method n0Method = null;
+            for (Method m : homeDialogCls.getDeclaredMethods()) {
+                if (m.getName().equals("n0") && m.getParameterCount() == 7) {
+                    n0Method = m;
                     break;
                 }
             }
-            if (moduleCls != null) {
-                Class<?> readableMapCls = classLoader.loadClass("com.facebook.react.bridge.ReadableMap");
-                Method findMethod = moduleCls.getDeclaredMethod("find", readableMapCls);
-                log(4, TAG, "Found ConfigRnModule.Module.find() method");
-                
-                hook(findMethod).intercept(chain -> {
+            if (n0Method != null) {
+                hook(n0Method).intercept(chain -> {
                     Object result = chain.proceed();
-                    if (result != null) {
-                        try {
-                            Object callArg = chain.getArgs().get(0);
-                            Method getStringMethod = callArg.getClass().getMethod("getString", String.class);
-                            String key = (String) getStringMethod.invoke(callArg, "key");
-                            if ("connect_tools_config".equals(key)) {
-                                log(4, TAG, "ConfigRnModule.Module.find() called with key=connect_tools_config");
-                                // result is WritableMap {"data": raw_json_object}
-                                // We already filtered in toolsConfigCls.a(), so no need to double-filter
-                                // But if find() is called directly by JS, this catches it too
+                    try {
+                        Object dialog = chain.getThisObject();
+                        Field bindingField = null;
+                        for (Field f : dialog.getClass().getDeclaredFields()) {
+                            if (f.getType().getName().contains("DialogHomeBinding")) {
+                                bindingField = f;
+                                break;
                             }
-                        } catch (Exception ignored) {}
+                        }
+                        if (bindingField == null) bindingField = dialog.getClass().getDeclaredField("g");
+                        bindingField.setAccessible(true);
+                        Object binding = bindingField.get(dialog);
+                        if (binding != null) {
+                            Field rnField = binding.getClass().getField("rnLayout");
+                            final android.view.View rnLayout = (android.view.View) rnField.get(binding);
+                            // 用 getRoot 获取根 View，统一处理所有隐藏
+                            try {
+                                Method getRootMethod = binding.getClass().getMethod("getRoot");
+                                final android.view.View rootView = (android.view.View) getRootMethod.invoke(binding);
+                                if (rootView != null && rootView instanceof android.view.ViewGroup) {
+                                    final android.view.ViewGroup rootVg = (android.view.ViewGroup) rootView;
+                                    // 多次延迟隐藏
+                                    rootVg.postDelayed(() -> hideSpecialViews(rootVg), 500);
+                                    rootVg.postDelayed(() -> hideSpecialViews(rootVg), 2000);
+                                    rootVg.postDelayed(() -> hideSpecialViews(rootVg), 5000);
+                                    // OnGlobalLayoutListener 持续监控
+                                    rootVg.getViewTreeObserver().addOnGlobalLayoutListener(
+                                        new android.view.ViewTreeObserver.OnGlobalLayoutListener() {
+                                            @Override
+                                            public void onGlobalLayout() {
+                                                hideSpecialViews(rootVg);
+                                            }
+                                        }
+                                    );
+                                }
+                            } catch (Exception ignored) {}
+                        }
+                    } catch (Exception e) {
+                        log(6, TAG, "Error in tool hide: " + e.getMessage());
                     }
                     return result;
                 });
-                log(4, TAG, "Hooked ConfigRnModule.Module.find() method");
+                log(4, TAG, "Hooked HomeDialog.n0() for tool hide (v9)");
             }
         } catch (Exception e) {
-            log(6, TAG, "Failed to hook ConfigRnModule.Module.find(): " + e.getMessage());
+            log(6, TAG, "Failed to hook HomeDialog.n0(): " + e.getMessage());
         }
+    }
 
-        // 核心 Hook B: 拦截 HomeDialog 中的其他组件
+    private void hideToolsInView(android.view.View root) {
+        if (!(root instanceof android.view.ViewGroup)) return;
+        android.view.ViewGroup vg = (android.view.ViewGroup) root;
+        for (int i = 0; i < vg.getChildCount(); i++) {
+            android.view.View child = vg.getChildAt(i);
+            // 检查 contentDescription
+            if (child.getContentDescription() != null) {
+                String desc = child.getContentDescription().toString().trim();
+                String pk = mapToolDescToPrefKey(desc);
+                if (pk != null && isFeatureEnabled(pk, false) && child.getVisibility() != android.view.View.GONE) {
+                    child.setVisibility(android.view.View.GONE);
+                    log(4, TAG, "Hid tool (desc): " + desc);
+                }
+            }
+            // 检查自身是 TextView
+            if (child instanceof android.widget.TextView) {
+                String text = ((android.widget.TextView) child).getText().toString().trim();
+                String pk = mapToolDescToPrefKey(text);
+                if (pk != null && isFeatureEnabled(pk, false) && child.getVisibility() != android.view.View.GONE) {
+                    child.setVisibility(android.view.View.GONE);
+                    log(4, TAG, "Hid tool (text): " + text);
+                }
+            }
+            // 检查子 View 的 TextView
+            if (child instanceof android.view.ViewGroup) {
+                android.view.ViewGroup cvg = (android.view.ViewGroup) child;
+                boolean found = false;
+                for (int j = 0; j < cvg.getChildCount(); j++) {
+                    android.view.View sub = cvg.getChildAt(j);
+                    if (sub instanceof android.widget.TextView) {
+                        String text = ((android.widget.TextView) sub).getText().toString().trim();
+                        String pk = mapToolDescToPrefKey(text);
+                        if (pk != null && isFeatureEnabled(pk, false) && child.getVisibility() != android.view.View.GONE) {
+                            child.setVisibility(android.view.View.GONE);
+                            log(4, TAG, "Hid tool (child text): " + text);
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+                // 递归遍历更深层
+                if (!found) {
+                    hideToolsInView(cvg);
+                }
+            }
+        }
+    }
+
+    private void hideViewById(android.view.ViewGroup root, String resName) {
+        for (int i = 0; i < root.getChildCount(); i++) {
+            android.view.View child = root.getChildAt(i);
+            try {
+                String entryName = child.getResources().getResourceEntryName(child.getId());
+                if (resName.equals(entryName) && child.getVisibility() != android.view.View.GONE) {
+                    child.setVisibility(android.view.View.GONE);
+                }
+            } catch (Exception ignored) {}
+            if (child instanceof android.view.ViewGroup) {
+                hideViewById((android.view.ViewGroup) child, resName);
+            }
+        }
+    }
+
+
+    // 隐藏广告横幅、立即加速按钮等特殊 View
+    private void hideSpecialViews(android.view.ViewGroup root) {
+        // 1. 按资源 ID 隐藏
+        hideViewById(root, "ad_banner");
+        hideViewById(root, "speed_up_layout");
+        // 2. 按文本隐藏工具栏
+        hideToolsInView(root);
+    }
+
+    private boolean isAnyToolHideEnabled() {
+        String[] keys = {"hide_tool_clean", "hide_tool_speedup", "hide_tool_cooling",
+            "hide_tool_speedtest", "hide_tool_network", "hide_tool_security",
+            "hide_tool_kuaikan", "hide_tool_novel", "hide_tool_game", "hide_tool_more",
+            "hide_tool_pieces", "hide_tool_douyin_coupon", "hide_tool_friend_msg"};
+        for (String k : keys) {
+            if (isFeatureEnabled(k, false)) return true;
+        }
+        return false;
+    }
+
+    private String findToolName(android.view.View view) {
+        if (view.getContentDescription() != null) {
+            String desc = view.getContentDescription().toString().trim();
+            if (!desc.isEmpty()) return desc;
+        }
+        if (view instanceof android.widget.TextView) {
+            String text = ((android.widget.TextView) view).getText().toString().trim();
+            if (!text.isEmpty() && mapToolDescToPrefKey(text) != null) return text;
+        }
+        if (view instanceof android.view.ViewGroup) {
+            android.view.ViewGroup vg = (android.view.ViewGroup) view;
+            for (int i = 0; i < vg.getChildCount(); i++) {
+                android.view.View child = vg.getChildAt(i);
+                if (child instanceof android.widget.TextView) {
+                    String text = ((android.widget.TextView) child).getText().toString().trim();
+                    if (!text.isEmpty() && mapToolDescToPrefKey(text) != null) return text;
+                }
+            }
+        }
+        return null;
+    }
+
+    private String mapToolDescToPrefKey(String name) {
+        if (name == null || name.isEmpty()) return null;
+        if (name.equals("垃圾清理")) return "hide_tool_clean";
+        if (name.equals("手机加速")) return "hide_tool_speedup";
+        if (name.equals("手机降温")) return "hide_tool_cooling";
+        if (name.equals("网络测速")) return "hide_tool_speedtest";
+        if (name.equals("网络加速")) return "hide_tool_network";
+        if (name.equals("安全检测")) return "hide_tool_security";
+        if (name.contains("快看")) return "hide_tool_kuaikan";
+        if (name.equals("免费小说")) return "hide_tool_novel";
+        if (name.equals("游戏中心")) return "hide_tool_game";
+        if (name.equals("更多")) return "hide_tool_more";
+        if (name.equals("文件碎片")) return "hide_tool_pieces";
+        if (name.contains("抖音优惠")) return "hide_tool_douyin_coupon";
+        if (name.equals("好友消息")) return "hide_tool_friend_msg";
+        return null;
+    }
+
+    private void hookHomeDialogComponents(ClassLoader classLoader) {
         try {
             Class<?> homeDialogCls = classLoader.loadClass("com.wifitutu.ui.home.HomeDialog");
 
-            // IM 消息提醒
-            hook(homeDialogCls.getDeclaredMethod("S1")).intercept(chain -> {
-                if (isFeatureEnabled("hide_tool_im", false)) return null;
-                return chain.proceed();
-            });
+            // S1 — IM 消息提醒 (多个重载)
+            for (Method m : homeDialogCls.getDeclaredMethods()) {
+                if (m.getName().equals("S1") && m.getParameterCount() > 0) {
+                    final Method s1m = m;
+                    Class<?> retType = m.getReturnType();
+                    hook(s1m).intercept(chain -> {
+                        if (isFeatureEnabled("hide_tool_im", false)) {
+                            return retType == int.class ? 0 : (retType == boolean.class ? Boolean.FALSE : null);
+                        }
+                        Object r = chain.proceed();
+                        return r != null ? r : (retType == int.class ? 0 : (retType == boolean.class ? Boolean.FALSE : null));
+                    });
+                    log(4, TAG, "Hooked HomeDialog.S1()");
+                    break;
+                }
+            }
 
-            // VIP 顶部入口
-            hook(homeDialogCls.getDeclaredMethod("a1")).intercept(chain -> {
-                if (isFeatureEnabled("hide_tool_vip", false)) return null;
-                return chain.proceed();
-            });
-
-            // 用户个人信息布局
-            hook(homeDialogCls.getDeclaredMethod("x1")).intercept(chain -> {
-                if (isFeatureEnabled("hide_tool_user", false)) return null;
-                return chain.proceed();
-            });
-
-            // 赋能面板 (Empower Panel)
+            // a1 — VIP 顶部入口
             try {
-                // I1 是负责计算并显示赋能面板高度的方法，拦截它可以阻止面板显示
+                hook(homeDialogCls.getDeclaredMethod("a1")).intercept(chain -> {
+                    if (isFeatureEnabled("hide_tool_vip", false)) return null;
+                    return chain.proceed();
+                });
+                log(4, TAG, "Hooked HomeDialog.a1() (VIP)");
+            } catch (Exception ignored) {}
+
+            // x1 — 用户个人信息布局
+            try {
+                hook(homeDialogCls.getDeclaredMethod("x1")).intercept(chain -> {
+                    if (isFeatureEnabled("hide_tool_user", false)) return null;
+                    return chain.proceed();
+                });
+                log(4, TAG, "Hooked HomeDialog.x1() (User)");
+            } catch (Exception ignored) {}
+
+            // I1 — 赋能面板
+            try {
                 hook(homeDialogCls.getDeclaredMethod("I1", homeDialogCls)).intercept(chain -> {
                     if (isFeatureEnabled("hide_tool_empower", false)) return null;
                     return chain.proceed();
                 });
+                log(4, TAG, "Hooked HomeDialog.I1() (Empower)");
             } catch (Exception ignored) {}
         } catch (Exception e) {
             log(6, TAG, "Failed to hook HomeDialog components: " + e.getMessage());
-        }
-
-        // 核心 Hook C: 拦截动态卡片 (Dynamic Card)
-        try {
-            Class<?> rnDynamicCardCls = classLoader.loadClass("com.wifitutu.ui.view.dynamiccard.RnWifiDynamicCardView");
-            hook(rnDynamicCardCls.getDeclaredMethod("isSupportDynamicCard")).intercept(chain -> {
-                if (isFeatureEnabled("hide_tool_dynamic_card", false)) return false;
-                return chain.proceed();
-            });
-        } catch (Exception e) {
-            log(6, TAG, "Failed to hook RnWifiDynamicCardView: " + e.getMessage());
-        }
-
-        // 核心 Hook D: 拦截 Target 30 提示
-        try {
-            Class<?> x5Cls = classLoader.loadClass("com.wifitutu.link.foundation.core.x5");
-            Class<?> n1Cls = classLoader.loadClass("com.wifitutu.link.foundation.sdk.n1");
-            // D 方法是负责渲染这些小组件的核心入口
-            // 尝试不同的方法签名
-            boolean hooked = false;
-            for (Method m : x5Cls.getDeclaredMethods()) {
-                if (m.getName().equals("D")) {
-                    Class<?>[] params = m.getParameterTypes();
-                    if (params.length >= 1 && params[0] == n1Cls) {
-                        hook(m).intercept(chain -> {
-                            Object n1Obj = chain.getArgs().get(0);
-                            if (n1Obj != null) {
-                                try {
-                                    Method getIdMethod = n1Obj.getClass().getMethod("getId");
-                                    String id = (String) getIdMethod.invoke(n1Obj);
-                                    if (id != null && id.contains("target30") && isFeatureEnabled("hide_tool_target30", false)) {
-                                        log(4, TAG, "Blocking Target30 widget: " + id);
-                                        return null;
-                                    }
-                                } catch (Exception ignored) {}
-                            }
-                            return chain.proceed();
-                        });
-                        hooked = true;
-                        log(4, TAG, "Successfully hooked Target30 method D");
-                        break;
-                    }
-                }
-            }
-            if (!hooked) {
-                log(6, TAG, "Failed to find Target30 method D with correct signature");
-            }
-        } catch (Exception e) {
-            log(6, TAG, "Failed to hook Target30 widgets: " + e.getMessage());
         }
     }
 
@@ -638,29 +701,115 @@ public class MainHook extends XposedModule {
     private void hookTeenagerMode(ClassLoader classLoader) {
         try {
             Class<?> teenagerClass = classLoader.loadClass(TEENAGER_MANAGER_CLASS);
-            
-            Method isRunningMethod = teenagerClass.getDeclaredMethod("isRunning");
-            hook(isRunningMethod).intercept(chain -> {
-                if (isFeatureEnabled("lite_teenager", false)) return true;
-                return chain.proceed();
-            });
 
-            Method isLimitedMethod = teenagerClass.getDeclaredMethod("isLimited");
-            hook(isLimitedMethod).intercept(chain -> {
-                if (isFeatureEnabled("lite_teenager", false)) return false;
-                return chain.proceed();
-            });
+            // isRunning() → true，让 app 认为青少年模式已开启
+            for (Method m : teenagerClass.getDeclaredMethods()) {
+                if (m.getName().equals("isRunning") && m.getParameterCount() == 0 && m.getReturnType() == boolean.class) {
+                    hook(m).intercept(chain -> {
+                        if (isFeatureEnabled("lite_teenager", false)) return true;
+                        return chain.proceed();
+                    });
+                    log(4, TAG, "Hooked teenager.isRunning()");
+                    break;
+                }
+            }
 
-            try {
-                Method owMethod = teenagerClass.getDeclaredMethod("ow");
-                hook(owMethod).intercept(chain -> {
-                    if (isFeatureEnabled("lite_teenager", false)) return null;
-                    return chain.proceed();
-                });
-            } catch (Exception ignored) {}
+            // isLimited() → false，避免限时锁定
+            for (Method m : teenagerClass.getDeclaredMethods()) {
+                if (m.getName().equals("isLimited") && m.getParameterCount() == 0 && m.getReturnType() == boolean.class) {
+                    hook(m).intercept(chain -> {
+                        if (isFeatureEnabled("lite_teenager", false)) return false;
+                        return chain.proceed();
+                    });
+                    log(4, TAG, "Hooked teenager.isLimited()");
+                    break;
+                }
+            }
+
+            // open(pwd) → true，跳过密码验证
+            for (Method m : teenagerClass.getDeclaredMethods()) {
+                if (m.getName().equals("open") && m.getParameterCount() == 1 && m.getReturnType() == boolean.class) {
+                    hook(m).intercept(chain -> {
+                        if (isFeatureEnabled("lite_teenager", false)) return true;
+                        return chain.proceed();
+                    });
+                    log(4, TAG, "Hooked teenager.open()");
+                    break;
+                }
+            }
+
+            // Ge(pwd) → true，跳过密码验证（关闭青少年模式）
+            for (Method m : teenagerClass.getDeclaredMethods()) {
+                if (m.getName().equals("Ge") && m.getParameterCount() == 1 && m.getReturnType() == boolean.class) {
+                    hook(m).intercept(chain -> {
+                        if (isFeatureEnabled("lite_teenager", false)) return true;
+                        return chain.proceed();
+                    });
+                    log(4, TAG, "Hooked teenager.Ge()");
+                    break;
+                }
+            }
 
         } catch (Exception e) {
             log(6, TAG, "Failed to hook TeenagerMode: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 绕过 5.2.19 防篡改检测
+     * 核心: AppManager.is_cheat_() (native) → sdk.i.Ye() → g0.Ye()
+     * 拦截 Ye() 让它永远返回 false，app 就认为未被篡改
+     */
+    private void hookAntiTamper(ClassLoader classLoader) {
+        // Hook sdk.i.Ye() — 这是 isCheat 的 Java 层入口
+        try {
+            Class<?> sdkICls = classLoader.loadClass("com.wifitutu.link.foundation.sdk.i");
+            for (Method m : sdkICls.getDeclaredMethods()) {
+                if (m.getName().equals("Ye") && m.getParameterCount() == 0 && m.getReturnType() == boolean.class) {
+                    hook(m).intercept(chain -> {
+                        log(4, TAG, "Bypassed isCheat (Ye) → false");
+                        return false;
+                    });
+                    log(4, TAG, "Hooked sdk.i.Ye() (anti-tamper bypass)");
+                    break;
+                }
+            }
+        } catch (Exception e) {
+            log(6, TAG, "Failed to hook sdk.i.Ye(): " + e.getMessage());
+        }
+
+        // Hook g0.Ye() — 接口层兜底
+        try {
+            Class<?> g0Cls = classLoader.loadClass("com.wifitutu.link.foundation.core.g0");
+            for (Method m : g0Cls.getDeclaredMethods()) {
+                if (m.getName().equals("Ye") && m.getParameterCount() == 0 && m.getReturnType() == boolean.class) {
+                    hook(m).intercept(chain -> {
+                        log(4, TAG, "Bypassed g0.Ye() → false");
+                        return false;
+                    });
+                    log(4, TAG, "Hooked g0.Ye() (anti-tamper bypass)");
+                    break;
+                }
+            }
+        } catch (Exception e) {
+            log(6, TAG, "Failed to hook g0.Ye(): " + e.getMessage());
+        }
+
+        // Hook AppManager.is_cheat_() — native 层绕过
+        try {
+            Class<?> appMgrCls = classLoader.loadClass("com.wifitutu.link.foundation.native_.AppManager");
+            for (Method m : appMgrCls.getDeclaredMethods()) {
+                if (m.getName().equals("is_cheat_") && m.getParameterCount() == 0) {
+                    hook(m).intercept(chain -> {
+                        log(4, TAG, "Bypassed is_cheat_() → false");
+                        return false;
+                    });
+                    log(4, TAG, "Hooked AppManager.is_cheat_() (native anti-tamper)");
+                    break;
+                }
+            }
+        } catch (Exception e) {
+            log(6, TAG, "Failed to hook is_cheat_: " + e.getMessage());
         }
     }
 
@@ -836,109 +985,7 @@ public class MainHook extends XposedModule {
         // v2 策略: 对所有 VIP 类的方法做泛化拦截 + l5.c/d 精确 hook
         // int→2, boolean→true/false, long→2035年, enum→SVIP/YEAR
 
-        final XposedInterface.Hooker vipMethodHooker = new XposedInterface.Hooker() {
-            @Override
-            public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable {
-                Method m = (Method) chain.getExecutable();
-                Class<?> returnType = m.getReturnType();
-                String name = m.getName();
-                if (m.getParameterCount() == 0) {
-                    if (returnType == int.class || returnType == Integer.class) {
-                        if (name.equals("getIndex")) return chain.proceed();
-                        return 2;
-                    }
-                    if (returnType == boolean.class || returnType == Boolean.class) {
-                        if (name.equals("Ao")) return false;
-                        if (name.equals("I2")) return true;
-                        if (name.toLowerCase().contains("expired") || name.equals("n")) return false;
-                        return true;
-                    }
-                    if (returnType == long.class || returnType == Long.class) {
-                        if (name.toLowerCase().contains("date") || name.toLowerCase().contains("expire") || name.toLowerCase().contains("time")) {
-                            return 2082729600000L;
-                        }
-                        return chain.proceed();
-                    }
-                    if (returnType.isEnum()) {
-                        String typeName = returnType.getName();
-                        try {
-                            if (typeName.endsWith(".n7") || typeName.equals("g50.g")) {
-                                return Enum.valueOf((Class<Enum>) returnType, "SVIP");
-                            } else if (typeName.endsWith(".VIP_CATEGORY") || typeName.endsWith(".MOVIE_VIP_CATEGORY")) {
-                                return Enum.valueOf((Class<Enum>) returnType, "YEAR");
-                            }
-                        } catch (Exception ignored) {}
-                    }
-                }
-                return chain.proceed();
-            }
-        };
-
-        final XposedInterface.Hooker vipConstructorHooker = new XposedInterface.Hooker() {
-            @Override
-            public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable {
-                Object result = chain.proceed();
-                Object obj = chain.getThisObject();
-                if (obj == null) return result;
-                Class<?> curr = obj.getClass();
-                while (curr != null && !curr.getName().equals("java.lang.Object")) {
-                    for (Field f : curr.getDeclaredFields()) {
-                        try {
-                            String name = f.getName().toLowerCase();
-                            f.setAccessible(true);
-                            Class<?> type = f.getType();
-                            if (name.contains("vip") || name.contains("svip")) {
-                                if (type == int.class || type == Integer.class) f.set(obj, 2);
-                                else if (type == boolean.class || type == Boolean.class) f.set(obj, true);
-                                else if (type == long.class || type == Long.class) f.set(obj, 2082729600000L);
-                            } else if (name.contains("expired")) {
-                                if (type == boolean.class || type == Boolean.class) f.set(obj, false);
-                            }
-                        } catch (Exception ignored) {}
-                    }
-                    curr = curr.getSuperclass();
-                }
-                return result;
-            }
-        };
-
-        // VIP 类列表 (5.2.19 版本)
-        String[] vipClasses = {
-            "com.wifitutu.link.foundation.native_.model.generate.vip.BridgeUserVipInfo",
-            "com.wifitutu.link.foundation.native_.model.generate.user.BridgeUserInfo",
-            "com.wifitutu.widget.core.n9",
-            "com.wifitutu.link.foundation.core.o5",
-            "com.wifitutu.link.foundation.react_native.core.VipItemInfo",
-            "com.wifitutu.link.foundation.webengine.plugin.VipItemInfo",
-            "com.wifitutu.vip.imp.MovieVipBagManager",
-            "com.wifitutu.vip.imp.VipUserBagManager",
-            "com.wifitutu.vip.imp.VipConfigManager",
-            "com.wifitutu.vip.imp.VipManager",
-            "com.wifitutu.link.foundation.sdk.i1",
-            "com.wifitutu.link.foundation.sdk.l1",
-            "com.wifitutu.user.imp.j",
-            "com.wifitutu.widget.core.k9",
-            "com.wifitutu.link.foundation.core.k0",
-            "py.a", "py.b", "j50.a", "j50.b", "ly.b",
-            "i50.d", "i50.e", "i50.b", "ry.b",
-            "uy.a", "uy.b"
-        };
-
-        int hookedCount = 0;
-        for (String clsName : vipClasses) {
-            try {
-                Class<?> clazz = classLoader.loadClass(clsName);
-                for (Method m : clazz.getDeclaredMethods()) {
-                    if (!m.isSynthetic() && !m.getName().equals("toString")) {
-                        hook(m).intercept(vipMethodHooker);
-                    }
-                }
-                for (Constructor<?> c : clazz.getDeclaredConstructors()) {
-                    hook(c).intercept(vipConstructorHooker);
-                }
-                hookedCount++;
-            } catch (Throwable ignored) {}
-        }
+        // v3 策略: 仅 hook m5.c/d 精确入口 (不再泛化拦截所有VIP方法，避免NPE崩溃)
 
         // ★ 关键: m5.c() / m5.d() — VIP/SVIP 最终判断入口 (5.2.19: 旧版 l5→m5)
         try {
@@ -963,7 +1010,33 @@ public class MainHook extends XposedModule {
             log(6, TAG, "m5 hook failed: " + e.getMessage());
         }
 
-        log(4, TAG, "Hooked " + hookedCount + " VIP classes + m5.c/d");
+        // BridgeUserVipInfo 构造后篡改字段
+        try {
+            Class<?> bviCls = classLoader.loadClass("com.wifitutu.link.foundation.native_.model.generate.vip.BridgeUserVipInfo");
+            for (Constructor<?> c : bviCls.getDeclaredConstructors()) {
+                hook(c).intercept(chain -> {
+                    Object result = chain.proceed();
+                    if (result != null) {
+                        try {
+                            for (Field f : result.getClass().getDeclaredFields()) {
+                                f.setAccessible(true);
+                                String fn = f.getName().toLowerCase();
+                                if (fn.equals("svip")) f.set(result, true);
+                                if (fn.equals("expired")) f.set(result, false);
+                                if (fn.equals("category")) f.set(result, 2);
+                                if (fn.equals("autorenew")) f.set(result, true);
+                                if (fn.equals("endtime")) f.set(result, 2082729600000L);
+                                if (fn.equals("starttime")) f.set(result, 1700000000000L);
+                            }
+                        } catch (Exception ignored) {}
+                    }
+                    return result;
+                });
+            }
+            log(4, TAG, "Hooked BridgeUserVipInfo constructors");
+        } catch (Throwable ignored) {}
+
+        log(4, TAG, "VIP hook v3 (m5.c/d + BridgeUserVipInfo)");
     }
 
     private void hookStorage(ClassLoader classLoader) {
@@ -1078,7 +1151,7 @@ public class MainHook extends XposedModule {
             // Hook 2: 拦截 x1.f() 中的 useDeleteModel 行为
             // 该方法在连接 WiFi 时会先删除旧配置再添加新配置
             try {
-                Class<?> y2Cls = classLoader.loadClass("oz.y2");
+                Class<?> y2Cls = classLoader.loadClass("jz.x2");
                 Class<?> wifiKeyModeCls = classLoader.loadClass("com.wifitutu.link.foundation.kernel.WIFI_KEY_MODE");
                 Method fMethod = x1Cls.getDeclaredMethod("f", y2Cls, wifiKeyModeCls);
 
