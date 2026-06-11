@@ -304,7 +304,7 @@ public class MainHook extends XposedModule {
     }
 
     private void hookHomeWidgets(ClassLoader classLoader) {
-        if (!isAnyToolHideEnabled()) return;
+        if (!isAnyToolHideEnabled() && !isFeatureEnabled("remove_ads", false) && !isFeatureEnabled("hide_speed_up", false)) return;
         try {
             Class<?> homeDialogCls = classLoader.loadClass("com.wifitutu.ui.home.HomeDialog");
             Method n0Method = null;
@@ -432,11 +432,18 @@ public class MainHook extends XposedModule {
 
     // 隐藏广告横幅、立即加速按钮等特殊 View
     private void hideSpecialViews(android.view.ViewGroup root) {
-        // 1. 按资源 ID 隐藏
-        hideViewById(root, "ad_banner");
-        hideViewById(root, "speed_up_layout");
-        // 2. 按文本隐藏工具栏
-        hideToolsInView(root);
+        // 广告横幅 — 受 remove_ads 控制
+        if (isFeatureEnabled("remove_ads", false)) {
+            hideViewById(root, "ad_banner");
+        }
+        // 立即加速 — 受 hide_speed_up 控制
+        if (isFeatureEnabled("hide_speed_up", false)) {
+            hideViewById(root, "speed_up_layout");
+        }
+        // 工具栏 — 受各工具开关控制
+        if (isAnyToolHideEnabled()) {
+            hideToolsInView(root);
+        }
     }
 
     private boolean isAnyToolHideEnabled() {

@@ -19,8 +19,8 @@ android {
         applicationId = "com.ty.wifikeyxposed"
         minSdk = 30
         targetSdk = 36
-        versionCode = 7
-        versionName = "1.5.4"
+        versionCode = 8
+        versionName = "1.5.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

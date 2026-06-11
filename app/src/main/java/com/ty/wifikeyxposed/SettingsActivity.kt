@@ -151,6 +151,7 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
     var bypassQsGuide by remember(tick) { mutableStateOf(prefs.getBoolean("bypass_qs_guide", false)) }
     var bypassOverlayGuide by remember(tick) { mutableStateOf(prefs.getBoolean("bypass_overlay_guide", false)) }
     var bypassAntiTamper by remember(tick) { mutableStateOf(prefs.getBoolean("bypass_anti_tamper", false)) }
+    var hideSpeedUp by remember(tick) { mutableStateOf(prefs.getBoolean("hide_speed_up", false)) }
 
     // 底栏精简状态
     var hideHome by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_home", false)) }
@@ -179,7 +180,7 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
             hideToolClean && hideToolSpeedup && hideToolCooling && hideToolSpeedtest &&
             hideToolNetwork && hideToolSecurity && hideToolKuaikan && hideToolNovel && hideToolGame && hideToolMore &&
             hideToolPieces && hideToolDouyinCoupon && hideToolFriendMsg &&
-            hideToolVip && hideToolUser && hideToolIm && hideToolEmpower && hideToolDynamicCard && hideToolTarget30 && hideToolArea
+            hideToolVip && hideToolUser && hideToolIm && hideToolEmpower && hideToolDynamicCard && hideToolTarget30 && hideToolArea && hideSpeedUp
             // 注意：根据要求，全选默认不包含 hideHome 和 hideMe
 
     Scaffold(
@@ -235,6 +236,7 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                         hideToolDynamicCard = target
                         hideToolTarget30 = target
                         hideToolArea = target
+                        hideSpeedUp = target
 
                         prefs.edit().run {
                             putBoolean("block_news", target)
@@ -278,6 +280,7 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                             putBoolean("hide_tool_dynamic_card", target)
                             putBoolean("hide_tool_target30", target)
                             putBoolean("hide_tool_area", target)
+                            putBoolean("hide_speed_up", target)
                             apply()
                         }
                     }) {
@@ -705,6 +708,14 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                         icon = Icons.Default.Warning,
                         checked = hideToolTarget30,
                         onCheckedChange = { hideToolTarget30 = it; prefs.edit().putBoolean("hide_tool_target30", it).apply() }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingItem(
+                        title = "隐藏立即加速按钮",
+                        subtitle = "隐藏首页连接状态区的「立即加速」按钮",
+                        icon = Icons.Default.Speed,
+                        checked = hideSpeedUp,
+                        onCheckedChange = { hideSpeedUp = it; prefs.edit().putBoolean("hide_speed_up", it).apply() }
                     )
                 }
             }
