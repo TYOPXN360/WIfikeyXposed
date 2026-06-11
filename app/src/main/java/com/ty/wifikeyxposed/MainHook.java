@@ -443,7 +443,14 @@ public class MainHook extends XposedModule {
         // 工具栏 — 受各工具开关控制
         if (isAnyToolHideEnabled()) {
             hideToolsInView(root);
+            // 隐藏 rnLayout 容器以消除空白
+            hideViewById(root, "rnLayout");
         }
+    }
+
+    private void hideRnLayoutArea(android.view.ViewGroup root) {
+        // 遍历查找 rnLayout 并隐藏
+        hideViewById(root, "rnLayout");
     }
 
     private boolean isAnyToolHideEnabled() {
