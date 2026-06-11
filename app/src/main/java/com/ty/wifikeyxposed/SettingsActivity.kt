@@ -12,6 +12,8 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.clickable
+import androidx.compose.animation.animateContentSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -152,6 +154,12 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
     var bypassOverlayGuide by remember(tick) { mutableStateOf(prefs.getBoolean("bypass_overlay_guide", false)) }
     var bypassAntiTamper by remember(tick) { mutableStateOf(prefs.getBoolean("bypass_anti_tamper", false)) }
     var hideSpeedUp by remember(tick) { mutableStateOf(prefs.getBoolean("hide_speed_up", false)) }
+
+    // 区域展开/折叠状态
+    var expandFeature by remember { mutableStateOf(true) }
+    var expandBottomBar by remember { mutableStateOf(true) }
+    var expandHomeTools by remember { mutableStateOf(true) }
+    var expandWifiProtect by remember { mutableStateOf(true) }
 
     // 底栏精简状态
     var hideHome by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_home", false)) }
@@ -297,13 +305,17 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
-            Text(
-                "功能增强 (已连接远程服务)",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(bottom = 8.dp, start = 8.dp)
-            )
-
+            // ─── 功能增强 ───
+            Row(
+                Modifier.fillMaxWidth().clickable { expandFeature = !expandFeature }
+                    .padding(bottom = 8.dp, start = 8.dp, end = 8.dp),
+                Arrangement.SpaceBetween, Alignment.CenterVertically
+            ) {
+                Text("功能增强", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                Icon(if (expandFeature) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null, tint = MaterialTheme.colorScheme.primary)
+            }
+            Column(Modifier.animateContentSize()) {
+            if (expandFeature) {
             ElevatedCard(
                 shape = MaterialTheme.shapes.extraLarge,
                 modifier = Modifier.fillMaxWidth()
@@ -398,16 +410,22 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                     }
                 }
             }
+            }
 
+            }
             Spacer(modifier = Modifier.height(24.dp))
 
-            Text(
-                "精简底栏 (极致净化)",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(bottom = 8.dp, start = 8.dp)
-            )
-
+            // ─── 精简底栏 ───
+            Row(
+                Modifier.fillMaxWidth().clickable { expandBottomBar = !expandBottomBar }
+                    .padding(bottom = 8.dp, start = 8.dp, end = 8.dp),
+                Arrangement.SpaceBetween, Alignment.CenterVertically
+            ) {
+                Text("精简底栏", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                Icon(if (expandBottomBar) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null, tint = MaterialTheme.colorScheme.primary)
+            }
+            Column(Modifier.animateContentSize()) {
+            if (expandBottomBar) {
             ElevatedCard(
                 shape = MaterialTheme.shapes.extraLarge,
                 modifier = Modifier.fillMaxWidth()
@@ -527,16 +545,22 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                     )
                 }
             }
+            }
 
+            }
             Spacer(modifier = Modifier.height(24.dp))
 
-            Text(
-                "精简首页组件 (极致净化)",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(bottom = 8.dp, start = 8.dp)
-            )
-
+            // ─── 精简首页组件 ───
+            Row(
+                Modifier.fillMaxWidth().clickable { expandHomeTools = !expandHomeTools }
+                    .padding(bottom = 8.dp, start = 8.dp, end = 8.dp),
+                Arrangement.SpaceBetween, Alignment.CenterVertically
+            ) {
+                Text("精简首页组件", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                Icon(if (expandHomeTools) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null, tint = MaterialTheme.colorScheme.primary)
+            }
+            Column(Modifier.animateContentSize()) {
+            if (expandHomeTools) {
             ElevatedCard(
                 shape = MaterialTheme.shapes.extraLarge,
                 modifier = Modifier.fillMaxWidth()
@@ -719,15 +743,22 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                     )
                 }
             }
+            }
 
+            }
             Spacer(modifier = Modifier.height(24.dp))
 
-            Text(
-                "WiFi 防护 (阻止静默操作)",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(bottom = 4.dp, start = 8.dp)
-            )
+            // ─── WiFi 防护 ───
+            Row(
+                Modifier.fillMaxWidth().clickable { expandWifiProtect = !expandWifiProtect }
+                    .padding(bottom = 4.dp, start = 8.dp, end = 8.dp),
+                Arrangement.SpaceBetween, Alignment.CenterVertically
+            ) {
+                Text("WiFi 防护", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                Icon(if (expandWifiProtect) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null, tint = MaterialTheme.colorScheme.primary)
+            }
+            Column(Modifier.animateContentSize()) {
+            if (expandWifiProtect) {
             Text(
                 "⚠️ 以下前三项为实验性功能，可能不生效",
                 style = MaterialTheme.typography.bodySmall,
@@ -788,7 +819,9 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                     )
                 }
             }
+            }
 
+            }
             Spacer(modifier = Modifier.height(24.dp))
 
             Button(
