@@ -902,12 +902,12 @@ public class MainHook extends XposedModule {
             }
         };
 
-        // VIP 类列表 (仅包含当前 APK 中存在的类)
+        // VIP 类列表 (5.2.19 版本)
         String[] vipClasses = {
             "com.wifitutu.link.foundation.native_.model.generate.vip.BridgeUserVipInfo",
             "com.wifitutu.link.foundation.native_.model.generate.user.BridgeUserInfo",
             "com.wifitutu.widget.core.n9",
-            "com.wifitutu.link.foundation.core.n5",
+            "com.wifitutu.link.foundation.core.o5",
             "com.wifitutu.link.foundation.react_native.core.VipItemInfo",
             "com.wifitutu.link.foundation.webengine.plugin.VipItemInfo",
             "com.wifitutu.vip.imp.MovieVipBagManager",
@@ -915,12 +915,11 @@ public class MainHook extends XposedModule {
             "com.wifitutu.vip.imp.VipConfigManager",
             "com.wifitutu.vip.imp.VipManager",
             "com.wifitutu.link.foundation.sdk.i1",
+            "com.wifitutu.link.foundation.sdk.l1",
             "com.wifitutu.user.imp.j",
-            "com.wifitutu.widget.core.j",
             "com.wifitutu.widget.core.k9",
             "com.wifitutu.link.foundation.core.k0",
-            "com.wifitutu.movie.core.utils.a",
-            "py.a", "py.b", "j50.a", "j50.b", "ly.b", "i50.g",
+            "py.a", "py.b", "j50.a", "j50.b", "ly.b",
             "i50.d", "i50.e", "i50.b", "ry.b",
             "uy.a", "uy.b"
         };
@@ -941,44 +940,30 @@ public class MainHook extends XposedModule {
             } catch (Throwable ignored) {}
         }
 
-        // ★ 关键: l5.c() / l5.d() — VIP/SVIP 最终判断入口
+        // ★ 关键: m5.c() / m5.d() — VIP/SVIP 最终判断入口 (5.2.19: 旧版 l5→m5)
         try {
-            Class<?> l5Cls = classLoader.loadClass("com.wifitutu.link.foundation.core.l5");
-            for (Method m : l5Cls.getDeclaredMethods()) {
+            Class<?> m5Cls = classLoader.loadClass("com.wifitutu.link.foundation.core.m5");
+            for (Method m : m5Cls.getDeclaredMethods()) {
                 String name = m.getName();
                 if (name.equals("d") && m.getParameterCount() == 1 && m.getReturnType() == boolean.class) {
                     hook(m).intercept(chain -> {
-                        log(4, TAG, "Spoofed l5.d(isVIP) → true");
+                        log(4, TAG, "Spoofed m5.d(isVIP) → true");
                         return true;
                     });
-                    log(4, TAG, "Hooked l5.d() (isVIP check)");
+                    log(4, TAG, "Hooked m5.d() (isVIP check)");
                 } else if (name.equals("c") && m.getParameterCount() == 1 && m.getReturnType() == boolean.class) {
                     hook(m).intercept(chain -> {
-                        log(4, TAG, "Spoofed l5.c(isSVIP) → true");
+                        log(4, TAG, "Spoofed m5.c(isSVIP) → true");
                         return true;
                     });
-                    log(4, TAG, "Hooked l5.c() (isSVIP check)");
+                    log(4, TAG, "Hooked m5.c() (isSVIP check)");
                 }
             }
         } catch (Throwable e) {
-            log(6, TAG, "l5 hook failed: " + e.getMessage());
+            log(6, TAG, "m5 hook failed: " + e.getMessage());
         }
 
-        // j5 静态方法
-        try {
-            Class<?> j5Class = classLoader.loadClass("com.wifitutu.link.foundation.core.j5");
-            for (Method m : j5Class.getDeclaredMethods()) {
-                if (Modifier.isStatic(m.getModifiers()) && (m.getReturnType() == boolean.class || m.getReturnType() == Boolean.class)) {
-                    hook(m).intercept(chain -> {
-                        String name = chain.getExecutable().getName();
-                        if (name.equals("c") || name.equals("d")) return true;
-                        return chain.proceed();
-                    });
-                }
-            }
-        } catch (Throwable ignored) {}
-
-        log(4, TAG, "Hooked " + hookedCount + " VIP classes + l5.c/d");
+        log(4, TAG, "Hooked " + hookedCount + " VIP classes + m5.c/d");
     }
 
     private void hookStorage(ClassLoader classLoader) {
