@@ -8,12 +8,16 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
-import androidx.compose.animation.animateContentSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -21,6 +25,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -46,7 +51,6 @@ class SettingsActivity : ComponentActivity(), XposedServiceHelper.OnServiceListe
         
         try {
             XposedServiceHelper.registerListener(this)
-            // 如果服务已经绑定过（从后台恢复），立即回调避免卡死
             cachedService?.let { onServiceBind(it) }
         } catch (e: Exception) {
             isServiceBound = true
@@ -100,22 +104,60 @@ fun AppTheme(content: @Composable () -> Unit) {
     )
 }
 
+@Composable
+fun ExpandableSection(
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    label: String,
+    content: @Composable () -> Unit
+) {
+    val rotation by animateFloatAsState(
+        targetValue = if (expanded) 0f else -90f,
+        animationSpec = tween(durationMillis = 250),
+        label = "chevron"
+    )
+
+    Column {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable { onToggle() }
+                .padding(bottom = 8.dp, start = 8.dp, end = 8.dp),
+            Arrangement.SpaceBetween,
+            Alignment.CenterVertically
+        ) {
+            Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            Icon(
+                Icons.Default.ExpandMore,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.graphicsLayer { rotationZ = rotation }
+            )
+        }
+        AnimatedVisibility(
+            visible = expanded,
+            enter = expandVertically(animationSpec = tween(300)),
+            exit = shrinkVertically(animationSpec = tween(250))
+        ) {
+            content()
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
     val context = LocalContext.current
     
-    // 监听后台偏好设置变化
     var tick by remember { mutableIntStateOf(0) }
     DisposableEffect(prefs) {
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
-            tick++ // 触发重组
+            tick++
         }
         prefs.registerOnSharedPreferenceChangeListener(listener)
         onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
 
-    // 使用 key 来确保重组时重新读取真实值
     var blockNews by remember(tick) { mutableStateOf(prefs.getBoolean("block_news", false)) }
     var unlockVip by remember(tick) { mutableStateOf(prefs.getBoolean("unlock_vip", false)) }
     var deepCleanVip by remember(tick) { mutableStateOf(prefs.getBoolean("deep_clean_vip", false)) }
@@ -124,7 +166,6 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
     var liteTeenager by remember(tick) { mutableStateOf(prefs.getBoolean("lite_teenager", false)) }
     var removeCloudControl by remember(tick) { mutableStateOf(prefs.getBoolean("remove_cloud_control", false)) }
 
-    // 首页小组件精简状态
     var hideToolClean by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_clean", false)) }
     var hideToolSpeedup by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_speedup", false)) }
     var hideToolCooling by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_cooling", false)) }
@@ -146,7 +187,6 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
     var hideToolTarget30 by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_target30", false)) }
     var hideToolArea by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_area", false)) }
 
-    // WiFi 防护状态
     var blockWifiClearConfig by remember(tick) { mutableStateOf(prefs.getBoolean("block_wifi_clear_config", false)) }
     var blockWifiDeleteModel by remember(tick) { mutableStateOf(prefs.getBoolean("block_wifi_delete_model", false)) }
     var blockWifiPostClean by remember(tick) { mutableStateOf(prefs.getBoolean("block_wifi_post_clean", false)) }
@@ -155,13 +195,11 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
     var bypassAntiTamper by remember(tick) { mutableStateOf(prefs.getBoolean("bypass_anti_tamper", false)) }
     var hideSpeedUp by remember(tick) { mutableStateOf(prefs.getBoolean("hide_speed_up", false)) }
 
-    // 区域展开/折叠状态
     var expandFeature by remember { mutableStateOf(true) }
     var expandBottomBar by remember { mutableStateOf(true) }
     var expandHomeTools by remember { mutableStateOf(true) }
     var expandWifiProtect by remember { mutableStateOf(true) }
 
-    // 底栏精简状态
     var hideHome by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_home", false)) }
     var hideNearby by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_nearby", false)) }
     var hideVideo by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_video", false)) }
@@ -170,7 +208,6 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
     var hideWeb by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_web", false)) }
     var hideGuard by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_guard", false)) }
     var hideMe by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_me", false)) }
-    // v5.2.18 新增底栏 Tab
     var hideDeepseek by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_deepseek", false)) }
     var hideShopmall by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_shopmall", false)) }
     var hideBus by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_bus", false)) }
@@ -178,7 +215,6 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
     var hideAi by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_ai", false)) }
     var hideKouxin by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_kouxin", false)) }
 
-    // 对话框状态
     var showHomeWarning by remember { mutableStateOf(false) }
     var showMeWarning by remember { mutableStateOf(false) }
 
@@ -189,7 +225,6 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
             hideToolNetwork && hideToolSecurity && hideToolKuaikan && hideToolNovel && hideToolGame && hideToolMore &&
             hideToolPieces && hideToolDouyinCoupon && hideToolFriendMsg &&
             hideToolVip && hideToolUser && hideToolIm && hideToolEmpower && hideToolDynamicCard && hideToolTarget30 && hideToolArea && hideSpeedUp
-            // 注意：根据要求，全选默认不包含 hideHome 和 hideMe
 
     Scaffold(
         topBar = {
@@ -306,522 +341,497 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                 .padding(16.dp)
         ) {
             // ─── 功能增强 ───
-            Row(
-                Modifier.fillMaxWidth().clickable { expandFeature = !expandFeature }
-                    .padding(bottom = 8.dp, start = 8.dp, end = 8.dp),
-                Arrangement.SpaceBetween, Alignment.CenterVertically
+            ExpandableSection(
+                expanded = expandFeature,
+                onToggle = { expandFeature = !expandFeature },
+                label = "功能增强"
             ) {
-                Text("功能增强", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                Icon(if (expandFeature) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null, tint = MaterialTheme.colorScheme.primary)
-            }
-            Column(Modifier.animateContentSize()) {
-            if (expandFeature) {
-            ElevatedCard(
-                shape = MaterialTheme.shapes.extraLarge,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(8.dp)) {
-                    SettingItem(
-                        title = "拦截广告推送",
-                        subtitle = "极致过滤通知栏新闻内容",
-                        icon = Icons.Default.Notifications,
-                        checked = blockNews,
-                        onCheckedChange = {
-                            blockNews = it
-                            prefs.edit().putBoolean("block_news", it).apply()
-                        }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "解锁本地会员",
-                        subtitle = "开启极速连接、SVIP 标识等特权",
-                        icon = Icons.Default.Star,
-                        checked = unlockVip,
-                        onCheckedChange = {
-                            unlockVip = it
-                            prefs.edit().putBoolean("unlock_vip", it).apply()
-                        }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "极致净化 (隐藏会员入口)",
-                        subtitle = "隐藏我的页面所有会员相关的横幅与图标",
-                        icon = Icons.Default.CleaningServices,
-                        checked = deepCleanVip,
-                        onCheckedChange = {
-                            deepCleanVip = it
-                            prefs.edit().putBoolean("deep_clean_vip", it).apply()
-                        }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "去除内置广告",
-                        subtitle = "拦截开屏、列表及视频广告",
-                        icon = Icons.Default.Clear,
-                        checked = removeAds,
-                        onCheckedChange = {
-                            removeAds = it
-                            prefs.edit().putBoolean("remove_ads", it).apply()
-                        }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "精简版青少年模式",
-                        subtitle = "利用内置拦截实现净化，无需密码且无时长限制",
-                        icon = Icons.Default.ChildCare,
-                        checked = liteTeenager,
-                        onCheckedChange = {
-                            liteTeenager = it
-                            prefs.edit().putBoolean("lite_teenager", it).apply()
-                        }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "去除云控系统",
-                        subtitle = "屏蔽远程策略下发，防止本地功能被服务器覆盖",
-                        icon = Icons.Default.CloudOff,
-                        checked = removeCloudControl,
-                        onCheckedChange = {
-                            removeCloudControl = it
-                            prefs.edit().putBoolean("remove_cloud_control", it).apply()
-                        }
-                    )
-                    
-                    if (removeCloudControl) {
-                        Box(modifier = Modifier.padding(start = 56.dp, bottom = 12.dp, end = 16.dp)) {
-                            OutlinedButton(
-                                onClick = {
-                                    val packageName = "com.snda.wifilocating"
-                                    val clearAction = "com.ty.wifikeyxposed.ACTION_CLEAR_CLOUD"
-                                    val intent = Intent(clearAction).apply { setPackage(packageName) }
-                                    context.sendBroadcast(intent)
-                                    Toast.makeText(context, "云控配置已清除", Toast.LENGTH_SHORT).show()
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = MaterialTheme.shapes.medium,
-                                border = ButtonDefaults.outlinedButtonBorder.copy(brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.error.copy(alpha = 0.5f))),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                            ) {
-                                Icon(Icons.Default.DeleteSweep, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("清除云控配置", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                ElevatedCard(
+                    shape = MaterialTheme.shapes.extraLarge,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(8.dp)) {
+                        SettingItem(
+                            title = "拦截广告推送",
+                            subtitle = "极致过滤通知栏新闻内容",
+                            icon = Icons.Default.Notifications,
+                            checked = blockNews,
+                            onCheckedChange = {
+                                blockNews = it
+                                prefs.edit().putBoolean("block_news", it).apply()
+                            }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "解锁本地会员",
+                            subtitle = "开启极速连接、SVIP 标识等特权",
+                            icon = Icons.Default.Star,
+                            checked = unlockVip,
+                            onCheckedChange = {
+                                unlockVip = it
+                                prefs.edit().putBoolean("unlock_vip", it).apply()
+                            }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "极致净化 (隐藏会员入口)",
+                            subtitle = "隐藏我的页面所有会员相关的横幅与图标",
+                            icon = Icons.Default.CleaningServices,
+                            checked = deepCleanVip,
+                            onCheckedChange = {
+                                deepCleanVip = it
+                                prefs.edit().putBoolean("deep_clean_vip", it).apply()
+                            }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "去除内置广告",
+                            subtitle = "拦截开屏、列表及视频广告",
+                            icon = Icons.Default.Clear,
+                            checked = removeAds,
+                            onCheckedChange = {
+                                removeAds = it
+                                prefs.edit().putBoolean("remove_ads", it).apply()
+                            }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "精简版青少年模式",
+                            subtitle = "利用内置拦截实现净化，无需密码且无时长限制",
+                            icon = Icons.Default.ChildCare,
+                            checked = liteTeenager,
+                            onCheckedChange = {
+                                liteTeenager = it
+                                prefs.edit().putBoolean("lite_teenager", it).apply()
+                            }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "去除云控系统",
+                            subtitle = "屏蔽远程策略下发，防止本地功能被服务器覆盖",
+                            icon = Icons.Default.CloudOff,
+                            checked = removeCloudControl,
+                            onCheckedChange = {
+                                removeCloudControl = it
+                                prefs.edit().putBoolean("remove_cloud_control", it).apply()
+                            }
+                        )
+                        
+                        if (removeCloudControl) {
+                            Box(modifier = Modifier.padding(start = 56.dp, bottom = 12.dp, end = 16.dp)) {
+                                OutlinedButton(
+                                    onClick = {
+                                        val packageName = "com.snda.wifilocating"
+                                        val clearAction = "com.ty.wifikeyxposed.ACTION_CLEAR_CLOUD"
+                                        val intent = Intent(clearAction).apply { setPackage(packageName) }
+                                        context.sendBroadcast(intent)
+                                        Toast.makeText(context, "云控配置已清除", Toast.LENGTH_SHORT).show()
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = MaterialTheme.shapes.medium,
+                                    border = ButtonDefaults.outlinedButtonBorder.copy(brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.error.copy(alpha = 0.5f))),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                                ) {
+                                    Icon(Icons.Default.DeleteSweep, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("清除云控配置", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                }
                             }
                         }
                     }
                 }
             }
-            }
 
-            }
             Spacer(modifier = Modifier.height(24.dp))
 
             // ─── 精简底栏 ───
-            Row(
-                Modifier.fillMaxWidth().clickable { expandBottomBar = !expandBottomBar }
-                    .padding(bottom = 8.dp, start = 8.dp, end = 8.dp),
-                Arrangement.SpaceBetween, Alignment.CenterVertically
+            ExpandableSection(
+                expanded = expandBottomBar,
+                onToggle = { expandBottomBar = !expandBottomBar },
+                label = "精简底栏"
             ) {
-                Text("精简底栏", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                Icon(if (expandBottomBar) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null, tint = MaterialTheme.colorScheme.primary)
-            }
-            Column(Modifier.animateContentSize()) {
-            if (expandBottomBar) {
-            ElevatedCard(
-                shape = MaterialTheme.shapes.extraLarge,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(8.dp)) {
-                    SettingItem(
-                        title = "精简首页 / 连接",
-                        subtitle = "核心功能项，谨慎开启",
-                        icon = Icons.Default.Home,
-                        checked = hideHome,
-                        onCheckedChange = { if (it) showHomeWarning = true else { hideHome = false; prefs.edit().putBoolean("hide_tab_home", false).apply() } }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "精简发现 / 附近",
-                        subtitle = "隐藏社交与周边信息入口",
-                        icon = Icons.Default.Explore,
-                        checked = hideNearby,
-                        onCheckedChange = { hideNearby = it; prefs.edit().putBoolean("hide_tab_nearby", it).apply() }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "精简视频",
-                        subtitle = "隐藏短视频流入口",
-                        icon = Icons.Default.VideoLibrary,
-                        checked = hideVideo,
-                        onCheckedChange = { hideVideo = it; prefs.edit().putBoolean("hide_tab_video", it).apply() }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "精简福利 / 赚钱",
-                        subtitle = "隐藏任务中心与广告任务入口",
-                        icon = Icons.Default.MonetizationOn,
-                        checked = hideWelfare,
-                        onCheckedChange = { hideWelfare = it; prefs.edit().putBoolean("hide_tab_welfare", it).apply() }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "精简消息 / 聊天",
-                        subtitle = "隐藏即时通讯与通知消息入口",
-                        icon = Icons.Default.Message,
-                        checked = hideIm,
-                        onCheckedChange = { hideIm = it; prefs.edit().putBoolean("hide_tab_im", it).apply() }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "精简资讯 / 网页",
-                        subtitle = "隐藏内置新闻浏览器入口",
-                        icon = Icons.Default.Public,
-                        checked = hideWeb,
-                        onCheckedChange = { hideWeb = it; prefs.edit().putBoolean("hide_tab_web", it).apply() }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "精简安全守护",
-                        subtitle = "隐藏检测与安全增强入口",
-                        icon = Icons.Default.Shield,
-                        checked = hideGuard,
-                        onCheckedChange = { hideGuard = it; prefs.edit().putBoolean("hide_tab_guard", it).apply() }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "精简我的",
-                        subtitle = "重要：开启后将失去模块设置入口",
-                        icon = Icons.Default.Person,
-                        checked = hideMe,
-                        onCheckedChange = { if (it) showMeWarning = true else { hideMe = false; prefs.edit().putBoolean("hide_tab_me", false).apply() } }
-                    )
-                    // v5.2.18 新增底栏 Tab
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "精简 DeepSeek AI",
-                        subtitle = "隐藏 AI 对话助手入口",
-                        icon = Icons.Default.Psychology,
-                        checked = hideDeepseek,
-                        onCheckedChange = { hideDeepseek = it; prefs.edit().putBoolean("hide_tab_deepseek", it).apply() }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "精简商城",
-                        subtitle = "隐藏电商购物入口",
-                        icon = Icons.Default.ShoppingCart,
-                        checked = hideShopmall,
-                        onCheckedChange = { hideShopmall = it; prefs.edit().putBoolean("hide_tab_shopmall", it).apply() }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "精简公交出行",
-                        subtitle = "隐藏公交出行服务入口",
-                        icon = Icons.Default.DirectionsBus,
-                        checked = hideBus,
-                        onCheckedChange = { hideBus = it; prefs.edit().putBoolean("hide_tab_bus", it).apply() }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "精简电影",
-                        subtitle = "隐藏电影购票入口",
-                        icon = Icons.Default.Movie,
-                        checked = hideFilm,
-                        onCheckedChange = { hideFilm = it; prefs.edit().putBoolean("hide_tab_film", it).apply() }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "精简 AI 连接",
-                        subtitle = "隐藏 AI 智能连接入口",
-                        icon = Icons.Default.AutoAwesome,
-                        checked = hideAi,
-                        onCheckedChange = { hideAi = it; prefs.edit().putBoolean("hide_tab_ai", it).apply() }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "精简逛逛",
-                        subtitle = "隐藏逛逛社交入口",
-                        icon = Icons.Default.Chat,
-                        checked = hideKouxin,
-                        onCheckedChange = { hideKouxin = it; prefs.edit().putBoolean("hide_tab_kouxin", it).apply() }
-                    )
+                ElevatedCard(
+                    shape = MaterialTheme.shapes.extraLarge,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(8.dp)) {
+                        SettingItem(
+                            title = "精简首页 / 连接",
+                            subtitle = "核心功能项，谨慎开启",
+                            icon = Icons.Default.Home,
+                            checked = hideHome,
+                            onCheckedChange = { if (it) showHomeWarning = true else { hideHome = false; prefs.edit().putBoolean("hide_tab_home", false).apply() } }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "精简发现 / 附近",
+                            subtitle = "隐藏社交与周边信息入口",
+                            icon = Icons.Default.Explore,
+                            checked = hideNearby,
+                            onCheckedChange = { hideNearby = it; prefs.edit().putBoolean("hide_tab_nearby", it).apply() }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "精简视频",
+                            subtitle = "隐藏短视频流入口",
+                            icon = Icons.Default.VideoLibrary,
+                            checked = hideVideo,
+                            onCheckedChange = { hideVideo = it; prefs.edit().putBoolean("hide_tab_video", it).apply() }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "精简福利 / 赚钱",
+                            subtitle = "隐藏任务中心与广告任务入口",
+                            icon = Icons.Default.MonetizationOn,
+                            checked = hideWelfare,
+                            onCheckedChange = { hideWelfare = it; prefs.edit().putBoolean("hide_tab_welfare", it).apply() }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "精简消息 / 聊天",
+                            subtitle = "隐藏即时通讯与通知消息入口",
+                            icon = Icons.Default.Message,
+                            checked = hideIm,
+                            onCheckedChange = { hideIm = it; prefs.edit().putBoolean("hide_tab_im", it).apply() }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "精简资讯 / 网页",
+                            subtitle = "隐藏内置新闻浏览器入口",
+                            icon = Icons.Default.Public,
+                            checked = hideWeb,
+                            onCheckedChange = { hideWeb = it; prefs.edit().putBoolean("hide_tab_web", it).apply() }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "精简安全守护",
+                            subtitle = "隐藏检测与安全增强入口",
+                            icon = Icons.Default.Shield,
+                            checked = hideGuard,
+                            onCheckedChange = { hideGuard = it; prefs.edit().putBoolean("hide_tab_guard", it).apply() }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "精简我的",
+                            subtitle = "重要：开启后将失去模块设置入口",
+                            icon = Icons.Default.Person,
+                            checked = hideMe,
+                            onCheckedChange = { if (it) showMeWarning = true else { hideMe = false; prefs.edit().putBoolean("hide_tab_me", false).apply() } }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "精简 DeepSeek AI",
+                            subtitle = "隐藏 AI 对话助手入口",
+                            icon = Icons.Default.Psychology,
+                            checked = hideDeepseek,
+                            onCheckedChange = { hideDeepseek = it; prefs.edit().putBoolean("hide_tab_deepseek", it).apply() }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "精简商城",
+                            subtitle = "隐藏电商购物入口",
+                            icon = Icons.Default.ShoppingCart,
+                            checked = hideShopmall,
+                            onCheckedChange = { hideShopmall = it; prefs.edit().putBoolean("hide_tab_shopmall", it).apply() }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "精简公交出行",
+                            subtitle = "隐藏公交出行服务入口",
+                            icon = Icons.Default.DirectionsBus,
+                            checked = hideBus,
+                            onCheckedChange = { hideBus = it; prefs.edit().putBoolean("hide_tab_bus", it).apply() }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "精简电影",
+                            subtitle = "隐藏电影购票入口",
+                            icon = Icons.Default.Movie,
+                            checked = hideFilm,
+                            onCheckedChange = { hideFilm = it; prefs.edit().putBoolean("hide_tab_film", it).apply() }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "精简 AI 连接",
+                            subtitle = "隐藏 AI 智能连接入口",
+                            icon = Icons.Default.AutoAwesome,
+                            checked = hideAi,
+                            onCheckedChange = { hideAi = it; prefs.edit().putBoolean("hide_tab_ai", it).apply() }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "精简逛逛",
+                            subtitle = "隐藏逛逛社交入口",
+                            icon = Icons.Default.Chat,
+                            checked = hideKouxin,
+                            onCheckedChange = { hideKouxin = it; prefs.edit().putBoolean("hide_tab_kouxin", it).apply() }
+                        )
+                    }
                 }
             }
-            }
 
-            }
             Spacer(modifier = Modifier.height(24.dp))
 
             // ─── 精简首页组件 ───
-            Row(
-                Modifier.fillMaxWidth().clickable { expandHomeTools = !expandHomeTools }
-                    .padding(bottom = 8.dp, start = 8.dp, end = 8.dp),
-                Arrangement.SpaceBetween, Alignment.CenterVertically
+            ExpandableSection(
+                expanded = expandHomeTools,
+                onToggle = { expandHomeTools = !expandHomeTools },
+                label = "精简首页组件"
             ) {
-                Text("精简首页组件", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                Icon(if (expandHomeTools) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null, tint = MaterialTheme.colorScheme.primary)
-            }
-            Column(Modifier.animateContentSize()) {
-            if (expandHomeTools) {
-            ElevatedCard(
-                shape = MaterialTheme.shapes.extraLarge,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(8.dp)) {
-                    SettingItem(
-                        title = "精简工具栏总开关",
-                        subtitle = "隐藏首页整个工具栏区域",
-                        icon = Icons.Default.Apps,
-                        checked = hideToolArea,
-                        onCheckedChange = { hideToolArea = it; prefs.edit().putBoolean("hide_tool_area", it).apply() }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "精简垃圾清理",
-                        subtitle = "隐藏首页工具栏中的清理入口",
-                        icon = Icons.Default.Delete,
-                        checked = hideToolClean,
-                        onCheckedChange = { hideToolClean = it; prefs.edit().putBoolean("hide_tool_clean", it).apply() }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "精简手机加速",
-                        subtitle = "隐藏首页工具栏中的加速入口",
-                        icon = Icons.Default.Speed,
-                        checked = hideToolSpeedup,
-                        onCheckedChange = { hideToolSpeedup = it; prefs.edit().putBoolean("hide_tool_speedup", it).apply() }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "精简手机降温",
-                        subtitle = "隐藏首页工具栏中的降温入口",
-                        icon = Icons.Default.Thermostat,
-                        checked = hideToolCooling,
-                        onCheckedChange = { hideToolCooling = it; prefs.edit().putBoolean("hide_tool_cooling", it).apply() }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "精简网络测速",
-                        subtitle = "隐藏首页工具栏中的测速入口",
-                        icon = Icons.Default.WifiTethering,
-                        checked = hideToolSpeedtest,
-                        onCheckedChange = { hideToolSpeedtest = it; prefs.edit().putBoolean("hide_tool_speedtest", it).apply() }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "精简网络加速",
-                        subtitle = "隐藏首页工具栏中的网络加速入口",
-                        icon = Icons.Default.NetworkCheck,
-                        checked = hideToolNetwork,
-                        onCheckedChange = { hideToolNetwork = it; prefs.edit().putBoolean("hide_tool_network", it).apply() }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "精简安全检测",
-                        subtitle = "隐藏首页工具栏中的安全检测入口",
-                        icon = Icons.Default.Security,
-                        checked = hideToolSecurity,
-                        onCheckedChange = { hideToolSecurity = it; prefs.edit().putBoolean("hide_tool_security", it).apply() }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "精简快看",
-                        subtitle = "隐藏首页工具栏中的快看入口",
-                        icon = Icons.Default.PlayCircle,
-                        checked = hideToolKuaikan,
-                        onCheckedChange = { hideToolKuaikan = it; prefs.edit().putBoolean("hide_tool_kuaikan", it).apply() }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "精简免费小说",
-                        subtitle = "隐藏首页工具栏中的免费小说入口",
-                        icon = Icons.Default.Book,
-                        checked = hideToolNovel,
-                        onCheckedChange = { hideToolNovel = it; prefs.edit().putBoolean("hide_tool_novel", it).apply() }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "精简游戏中心",
-                        subtitle = "隐藏首页工具栏中的游戏中心入口",
-                        icon = Icons.Default.Gamepad,
-                        checked = hideToolGame,
-                        onCheckedChange = { hideToolGame = it; prefs.edit().putBoolean("hide_tool_game", it).apply() }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "精简更多",
-                        subtitle = "隐藏首页工具栏中的更多入口",
-                        icon = Icons.Default.MoreVert,
-                        checked = hideToolMore,
-                        onCheckedChange = { hideToolMore = it; prefs.edit().putBoolean("hide_tool_more", it).apply() }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "精简文件碎片",
-                        subtitle = "隐藏首页工具栏中的文件碎片入口",
-                        icon = Icons.Default.BrokenImage,
-                        checked = hideToolPieces,
-                        onCheckedChange = { hideToolPieces = it; prefs.edit().putBoolean("hide_tool_pieces", it).apply() }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "精简抖音优惠券",
-                        subtitle = "隐藏首页工具栏中的抖音优惠券入口",
-                        icon = Icons.Default.LocalOffer,
-                        checked = hideToolDouyinCoupon,
-                        onCheckedChange = { hideToolDouyinCoupon = it; prefs.edit().putBoolean("hide_tool_douyin_coupon", it).apply() }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "精简好友消息",
-                        subtitle = "隐藏首页工具栏中的好友消息入口",
-                        icon = Icons.Default.ChatBubble,
-                        checked = hideToolFriendMsg,
-                        onCheckedChange = { hideToolFriendMsg = it; prefs.edit().putBoolean("hide_tool_friend_msg", it).apply() }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "精简顶部 VIP",
-                        subtitle = "隐藏右上角 VIP 会员入口",
-                        icon = Icons.Default.CardMembership,
-                        checked = hideToolVip,
-                        onCheckedChange = { hideToolVip = it; prefs.edit().putBoolean("hide_tool_vip", it).apply() }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "精简用户信息",
-                        subtitle = "隐藏首页顶部的用户头像与昵称",
-                        icon = Icons.Default.AccountCircle,
-                        checked = hideToolUser,
-                        onCheckedChange = { hideToolUser = it; prefs.edit().putBoolean("hide_tool_user", it).apply() }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "精简 IM 提醒",
-                        subtitle = "隐藏首页的消息/通知弹窗提醒",
-                        icon = Icons.Default.Sms,
-                        checked = hideToolIm,
-                        onCheckedChange = { hideToolIm = it; prefs.edit().putBoolean("hide_tool_im", it).apply() }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "精简赋能面板",
-                        subtitle = "隐藏连接成功后的功能赋能面板",
-                        icon = Icons.Default.Extension,
-                        checked = hideToolEmpower,
-                        onCheckedChange = { hideToolEmpower = it; prefs.edit().putBoolean("hide_tool_empower", it).apply() }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "精简动态卡片",
-                        subtitle = "隐藏首页底部的各类动态广告/内容卡片",
-                        icon = Icons.Default.FeaturedPlayList,
-                        checked = hideToolDynamicCard,
-                        onCheckedChange = { hideToolDynamicCard = it; prefs.edit().putBoolean("hide_tool_dynamic_card", it).apply() }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "屏蔽签到浮球",
-                        subtitle = "隐藏主页右下角的「签到领现金」浮动广告球",
-                        icon = Icons.Default.Ballot,
-                        checked = blockCoinTaskBall,
-                        onCheckedChange = { blockCoinTaskBall = it; prefs.edit().putBoolean("block_coin_task_ball", it).apply() }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "精简 Target 30",
-                        subtitle = "隐藏 Target 30 相关的升级或指窗提示",
-                        icon = Icons.Default.Warning,
-                        checked = hideToolTarget30,
-                        onCheckedChange = { hideToolTarget30 = it; prefs.edit().putBoolean("hide_tool_target30", it).apply() }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "隐藏立即加速按钮",
-                        subtitle = "隐藏首页连接状态区的「立即加速」按钮",
-                        icon = Icons.Default.Speed,
-                        checked = hideSpeedUp,
-                        onCheckedChange = { hideSpeedUp = it; prefs.edit().putBoolean("hide_speed_up", it).apply() }
-                    )
+                ElevatedCard(
+                    shape = MaterialTheme.shapes.extraLarge,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(8.dp)) {
+                        SettingItem(
+                            title = "精简工具栏总开关",
+                            subtitle = "隐藏首页整个工具栏区域",
+                            icon = Icons.Default.Apps,
+                            checked = hideToolArea,
+                            onCheckedChange = { hideToolArea = it; prefs.edit().putBoolean("hide_tool_area", it).apply() }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "精简垃圾清理",
+                            subtitle = "隐藏首页工具栏中的清理入口",
+                            icon = Icons.Default.Delete,
+                            checked = hideToolClean,
+                            onCheckedChange = { hideToolClean = it; prefs.edit().putBoolean("hide_tool_clean", it).apply() }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "精简手机加速",
+                            subtitle = "隐藏首页工具栏中的加速入口",
+                            icon = Icons.Default.Speed,
+                            checked = hideToolSpeedup,
+                            onCheckedChange = { hideToolSpeedup = it; prefs.edit().putBoolean("hide_tool_speedup", it).apply() }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "精简手机降温",
+                            subtitle = "隐藏首页工具栏中的降温入口",
+                            icon = Icons.Default.Thermostat,
+                            checked = hideToolCooling,
+                            onCheckedChange = { hideToolCooling = it; prefs.edit().putBoolean("hide_tool_cooling", it).apply() }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "精简网络测速",
+                            subtitle = "隐藏首页工具栏中的测速入口",
+                            icon = Icons.Default.WifiTethering,
+                            checked = hideToolSpeedtest,
+                            onCheckedChange = { hideToolSpeedtest = it; prefs.edit().putBoolean("hide_tool_speedtest", it).apply() }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "精简网络加速",
+                            subtitle = "隐藏首页工具栏中的网络加速入口",
+                            icon = Icons.Default.NetworkCheck,
+                            checked = hideToolNetwork,
+                            onCheckedChange = { hideToolNetwork = it; prefs.edit().putBoolean("hide_tool_network", it).apply() }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "精简安全检测",
+                            subtitle = "隐藏首页工具栏中的安全检测入口",
+                            icon = Icons.Default.Security,
+                            checked = hideToolSecurity,
+                            onCheckedChange = { hideToolSecurity = it; prefs.edit().putBoolean("hide_tool_security", it).apply() }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "精简快看",
+                            subtitle = "隐藏首页工具栏中的快看入口",
+                            icon = Icons.Default.PlayCircle,
+                            checked = hideToolKuaikan,
+                            onCheckedChange = { hideToolKuaikan = it; prefs.edit().putBoolean("hide_tool_kuaikan", it).apply() }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "精简免费小说",
+                            subtitle = "隐藏首页工具栏中的免费小说入口",
+                            icon = Icons.Default.Book,
+                            checked = hideToolNovel,
+                            onCheckedChange = { hideToolNovel = it; prefs.edit().putBoolean("hide_tool_novel", it).apply() }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "精简游戏中心",
+                            subtitle = "隐藏首页工具栏中的游戏中心入口",
+                            icon = Icons.Default.Gamepad,
+                            checked = hideToolGame,
+                            onCheckedChange = { hideToolGame = it; prefs.edit().putBoolean("hide_tool_game", it).apply() }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "精简更多",
+                            subtitle = "隐藏首页工具栏中的更多入口",
+                            icon = Icons.Default.MoreVert,
+                            checked = hideToolMore,
+                            onCheckedChange = { hideToolMore = it; prefs.edit().putBoolean("hide_tool_more", it).apply() }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "精简文件碎片",
+                            subtitle = "隐藏首页工具栏中的文件碎片入口",
+                            icon = Icons.Default.BrokenImage,
+                            checked = hideToolPieces,
+                            onCheckedChange = { hideToolPieces = it; prefs.edit().putBoolean("hide_tool_pieces", it).apply() }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "精简抖音优惠券",
+                            subtitle = "隐藏首页工具栏中的抖音优惠券入口",
+                            icon = Icons.Default.LocalOffer,
+                            checked = hideToolDouyinCoupon,
+                            onCheckedChange = { hideToolDouyinCoupon = it; prefs.edit().putBoolean("hide_tool_douyin_coupon", it).apply() }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "精简好友消息",
+                            subtitle = "隐藏首页工具栏中的好友消息入口",
+                            icon = Icons.Default.ChatBubble,
+                            checked = hideToolFriendMsg,
+                            onCheckedChange = { hideToolFriendMsg = it; prefs.edit().putBoolean("hide_tool_friend_msg", it).apply() }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "精简顶部 VIP",
+                            subtitle = "隐藏右上角 VIP 会员入口",
+                            icon = Icons.Default.CardMembership,
+                            checked = hideToolVip,
+                            onCheckedChange = { hideToolVip = it; prefs.edit().putBoolean("hide_tool_vip", it).apply() }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "精简用户信息",
+                            subtitle = "隐藏首页顶部的用户头像与昵称",
+                            icon = Icons.Default.AccountCircle,
+                            checked = hideToolUser,
+                            onCheckedChange = { hideToolUser = it; prefs.edit().putBoolean("hide_tool_user", it).apply() }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "精简 IM 提醒",
+                            subtitle = "隐藏首页的消息/通知弹窗提醒",
+                            icon = Icons.Default.Sms,
+                            checked = hideToolIm,
+                            onCheckedChange = { hideToolIm = it; prefs.edit().putBoolean("hide_tool_im", it).apply() }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "精简赋能面板",
+                            subtitle = "隐藏连接成功后的功能赋能面板",
+                            icon = Icons.Default.Extension,
+                            checked = hideToolEmpower,
+                            onCheckedChange = { hideToolEmpower = it; prefs.edit().putBoolean("hide_tool_empower", it).apply() }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "精简动态卡片",
+                            subtitle = "隐藏首页底部的各类动态广告/内容卡片",
+                            icon = Icons.Default.FeaturedPlayList,
+                            checked = hideToolDynamicCard,
+                            onCheckedChange = { hideToolDynamicCard = it; prefs.edit().putBoolean("hide_tool_dynamic_card", it).apply() }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "屏蔽签到浮球",
+                            subtitle = "隐藏主页右下角的「签到领现金」浮动广告球",
+                            icon = Icons.Default.Ballot,
+                            checked = blockCoinTaskBall,
+                            onCheckedChange = { blockCoinTaskBall = it; prefs.edit().putBoolean("block_coin_task_ball", it).apply() }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "精简 Target 30",
+                            subtitle = "隐藏 Target 30 相关的升级或指窗提示",
+                            icon = Icons.Default.Warning,
+                            checked = hideToolTarget30,
+                            onCheckedChange = { hideToolTarget30 = it; prefs.edit().putBoolean("hide_tool_target30", it).apply() }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "隐藏立即加速按钮",
+                            subtitle = "隐藏首页连接状态区的「立即加速」按钮",
+                            icon = Icons.Default.Speed,
+                            checked = hideSpeedUp,
+                            onCheckedChange = { hideSpeedUp = it; prefs.edit().putBoolean("hide_speed_up", it).apply() }
+                        )
+                    }
                 }
             }
-            }
 
-            }
             Spacer(modifier = Modifier.height(24.dp))
 
             // ─── WiFi 防护 ───
-            Row(
-                Modifier.fillMaxWidth().clickable { expandWifiProtect = !expandWifiProtect }
-                    .padding(bottom = 4.dp, start = 8.dp, end = 8.dp),
-                Arrangement.SpaceBetween, Alignment.CenterVertically
+            ExpandableSection(
+                expanded = expandWifiProtect,
+                onToggle = { expandWifiProtect = !expandWifiProtect },
+                label = "WiFi 防护"
             ) {
-                Text("WiFi 防护", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                Icon(if (expandWifiProtect) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null, tint = MaterialTheme.colorScheme.primary)
-            }
-            Column(Modifier.animateContentSize()) {
-            if (expandWifiProtect) {
-            Text(
-                "⚠️ 以下前三项为实验性功能，可能不生效",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(bottom = 8.dp, start = 8.dp)
-            )
+                Text(
+                    "⚠️ 以下前三项为实验性功能，可能不生效",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(bottom = 8.dp, start = 8.dp)
+                )
 
-            ElevatedCard(
-                shape = MaterialTheme.shapes.extraLarge,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(8.dp)) {
-                    SettingItem(
-                        title = "阻止连接前清除网络",
-                        subtitle = "[实验性] 拦截连接 WiFi 前静默删除 App 自建网络配置的行为",
-                        icon = Icons.Default.Wifi,
-                        checked = blockWifiClearConfig,
-                        onCheckedChange = { blockWifiClearConfig = it; prefs.edit().putBoolean("block_wifi_clear_config", it).apply() }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "阻止先删后加模式",
-                        subtitle = "[实验性] 拦截连接时先删除旧配置再添加新配置的 useDeleteModel 行为",
-                        icon = Icons.Default.Block,
-                        checked = blockWifiDeleteModel,
-                        onCheckedChange = { blockWifiDeleteModel = it; prefs.edit().putBoolean("block_wifi_delete_model", it).apply() }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "阻止失败后清理配置",
-                        subtitle = "[实验性] 拦截连接失败后静默清理 WiFi 网络配置的行为",
-                        icon = Icons.Default.CleaningServices,
-                        checked = blockWifiPostClean,
-                        onCheckedChange = { blockWifiPostClean = it; prefs.edit().putBoolean("block_wifi_post_clean", it).apply() }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "跳过 QS 磁贴引导",
-                        subtitle = "连接 WiFi 时跳过「添加快速设置磁贴」引导弹窗，直接连接",
-                        icon = Icons.Default.Speed,
-                        checked = bypassQsGuide,
-                        onCheckedChange = { bypassQsGuide = it; prefs.edit().putBoolean("bypass_qs_guide", it).apply() }
-                    )
-                    SettingItem(
-                        title = "跳过悬浮窗权限引导",
-                        subtitle = "连接 WiFi 时跳过「授予悬浮窗权限」引导弹窗，直接连接",
-                        icon = Icons.Default.Layers,
-                        checked = bypassOverlayGuide,
-                        onCheckedChange = { bypassOverlayGuide = it; prefs.edit().putBoolean("bypass_overlay_guide", it).apply() }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingItem(
-                        title = "绕过防篡改检测",
-                        subtitle = "屏蔽 APK 完整性校验，允许安全修改数据层",
-                        icon = Icons.Default.Security,
-                        checked = bypassAntiTamper,
-                        onCheckedChange = { bypassAntiTamper = it; prefs.edit().putBoolean("bypass_anti_tamper", it).apply() }
-                    )
+                ElevatedCard(
+                    shape = MaterialTheme.shapes.extraLarge,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(8.dp)) {
+                        SettingItem(
+                            title = "阻止连接前清除网络",
+                            subtitle = "[实验性] 拦截连接 WiFi 前静默删除 App 自建网络配置的行为",
+                            icon = Icons.Default.Wifi,
+                            checked = blockWifiClearConfig,
+                            onCheckedChange = { blockWifiClearConfig = it; prefs.edit().putBoolean("block_wifi_clear_config", it).apply() }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "阻止先删后加模式",
+                            subtitle = "[实验性] 拦截连接时先删除旧配置再添加新配置的 useDeleteModel 行为",
+                            icon = Icons.Default.Block,
+                            checked = blockWifiDeleteModel,
+                            onCheckedChange = { blockWifiDeleteModel = it; prefs.edit().putBoolean("block_wifi_delete_model", it).apply() }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "阻止失败后清理配置",
+                            subtitle = "[实验性] 拦截连接失败后静默清理 WiFi 网络配置的行为",
+                            icon = Icons.Default.CleaningServices,
+                            checked = blockWifiPostClean,
+                            onCheckedChange = { blockWifiPostClean = it; prefs.edit().putBoolean("block_wifi_post_clean", it).apply() }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "跳过 QS 磁贴引导",
+                            subtitle = "连接 WiFi 时跳过「添加快速设置磁贴」引导弹窗，直接连接",
+                            icon = Icons.Default.Speed,
+                            checked = bypassQsGuide,
+                            onCheckedChange = { bypassQsGuide = it; prefs.edit().putBoolean("bypass_qs_guide", it).apply() }
+                        )
+                        SettingItem(
+                            title = "跳过悬浮窗权限引导",
+                            subtitle = "连接 WiFi 时跳过「授予悬浮窗权限」引导弹窗，直接连接",
+                            icon = Icons.Default.Layers,
+                            checked = bypassOverlayGuide,
+                            onCheckedChange = { bypassOverlayGuide = it; prefs.edit().putBoolean("bypass_overlay_guide", it).apply() }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "绕过防篡改检测",
+                            subtitle = "屏蔽 APK 完整性校验，允许安全修改数据层",
+                            icon = Icons.Default.Security,
+                            checked = bypassAntiTamper,
+                            onCheckedChange = { bypassAntiTamper = it; prefs.edit().putBoolean("bypass_anti_tamper", it).apply() }
+                        )
+                    }
                 }
             }
-            }
 
-            }
             Spacer(modifier = Modifier.height(24.dp))
 
             Button(
@@ -830,7 +840,6 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                     val mainActivity = "com.wifitutu.ui.launcher.LauncherActivity"
                     val restartAction = "com.ty.wifikeyxposed.ACTION_RESTART"
                     
-                    // 1. 发送免 Root 自杀广播
                     val intent = Intent(restartAction).apply {
                         setPackage(packageName)
                     }
@@ -838,7 +847,6 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                     
                     Toast.makeText(context, "重启中...", Toast.LENGTH_SHORT).show()
                     
-                    // 2. 延迟 1.5 秒后，通过显式类名直接拉起
                     android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                         try {
                             val launchIntent = Intent().apply {
@@ -847,7 +855,6 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                             }
                             context.startActivity(launchIntent)
                         } catch (e: Exception) {
-                            // 回退到常规启动
                             val fallback = context.packageManager.getLaunchIntentForPackage(packageName)
                             fallback?.let { context.startActivity(it) }
                         }
@@ -871,7 +878,6 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
         }
     }
 
-    // 警告对话框：精简首页
     if (showHomeWarning) {
         var countdown by remember { mutableIntStateOf(3) }
         LaunchedEffect(Unit) {
@@ -908,7 +914,6 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
         )
     }
 
-    // 警告对话框：精简我的
     if (showMeWarning) {
         var countdown by remember { mutableIntStateOf(3) }
         LaunchedEffect(Unit) {
