@@ -1,8 +1,8 @@
 # WiFi万能钥匙 Xposed 模块
 
-WiFi万能钥匙 5.2.18 的 Xposed 模块，提供本地 SVIP 永久解锁、全模块去广告、底栏/工具栏精简、WiFi 防护等功能。
+WiFi万能钥匙 5.2.19 的 Xposed 模块，提供本地 SVIP 永久解锁、全模块去广告、底栏/工具栏精简、WiFi 防护等功能。
 
-[![Latest Release](https://img.shields.io/badge/最新版本-v1.5.2-blue)](https://github.com/TYOPXN360/WIfikeyXposed/releases/latest)
+[![Latest Release](https://img.shields.io/badge/最新版本-v1.5.8-blue)](https://github.com/TYOPXN360/WIfikeyXposed/releases/latest)
 [![Downloads](https://img.shields.io/badge/平台-Android_11%2B-green)](https://github.com/TYOPXN360/WIfikeyXposed/releases)
 
 ## ⚠️ 代码生成说明
@@ -40,6 +40,9 @@ WiFi万能钥匙 5.2.18 的 Xposed 模块，提供本地 SVIP 永久解锁、全
 - **阻止先删后加模式**：拦截连接时先删除旧配置再添加新配置的 useDeleteModel 行为
 - **阻止失败后清理配置**：拦截连接失败后静默清理 WiFi 网络配置的行为
 
+### 防篡改绕过
+- **绕过防篡改检测**：屏蔽 APK 完整性校验，允许安全修改数据层
+
 ## 已验证功能
 
 - ✅ 底栏精简功能正常工作
@@ -53,7 +56,7 @@ WiFi万能钥匙 5.2.18 的 Xposed 模块，提供本地 SVIP 永久解锁、全
 
 ## 技术信息
 
-- **目标应用**：WiFi万能钥匙 5.2.18 (com.snda.wifilocating)
+- **目标应用**：WiFi万能钥匙 5.2.19 (com.snda.wifilocating)
 - **最低系统**：Android 11 (API 30)
 - **Xposed API**：libxposed API 101
 - **开发框架**：Android Gradle + Kotlin + Jetpack Compose
@@ -90,3 +93,24 @@ WIfikeyXposed/
 - 本模块仅供学习研究使用，请勿用于商业目的
 - 部分功能可能会因为应用更新而失效
 - WiFi 防护功能为实验性功能，可能不完全生效
+
+## 更新日志
+
+### v1.5.8
+- 重做设置界面展开/折叠过渡动画（ExpandableSection + AnimatedVisibility + 箭头旋转动画）
+
+### v1.5.7
+- 修复工具栏隐藏后空白区域问题（隐藏 rnLayout 容器）
+
+### v1.5.6
+- 设置界面 4 个区域添加可点击折叠/展开，使用 animateContentSize 过渡动画
+
+### v1.5.5
+- 广告横幅隐藏并入「去除内置广告」开关
+- 新增「隐藏立即加速按钮」独立开关
+
+### v1.5.4
+- 工具栏精简（21 项独立控制）
+- 广告横幅屏蔽
+- 立即加速按钮控制
+- 青少年模式增强
