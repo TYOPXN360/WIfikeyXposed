@@ -1,9 +1,9 @@
 name=WiFiKeyXposed
 id=com.ty.wifikeyxposed
 author=ty
-description=WiFi万能钥匙自定义设置模块
-version=1.0
-versionCode=1
+description=WiFi万能钥匙增强模块：本地SVIP解锁、去广告、底栏/工具栏精简、WiFi防护、防篡改绕过、云控去除等功能。适配v5.2.19。
+version=1.5.8
+versionCode=10
 minApiVersion=101
 targetApiVersion=101
 staticScope=true
