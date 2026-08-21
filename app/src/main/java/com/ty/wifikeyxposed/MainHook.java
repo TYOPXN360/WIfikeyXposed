@@ -33,9 +33,11 @@ import androidx.annotation.NonNull;
 
 import io.github.libxposed.api.XposedInterface;
 import io.github.libxposed.api.XposedModule;
+import io.github.libxposed.api.XposedModuleInterface;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
@@ -53,8 +55,50 @@ public class MainHook extends XposedModule {
     private static final String ACTION_RESTART = "com.ty.wifikeyxposed.ACTION_RESTART";
     private static final String ACTION_CLEAR_CLOUD = "com.ty.wifikeyxposed.ACTION_CLEAR_CLOUD";
 
+    /** 5.2.29 native bridge 生成类 (lib-native_release) — 全部为 native 方法, 汇聚了 app 所有 JNI 调用 */
+    private static final String[] NATIVE_BRIDGE_CLASSES = {
+        "C01cdb392bfd527d707b524edd53587f7",
+        "C33770a53a0574b75dc315f193807bc22",
+        "C39e27d40794a5115491979f02e84d758",
+        "C401e8c36c253e3ffbcd603ae42d97d54",
+        "C4cb43ce283b9ea38e0e83f91c723b73c",
+        "C50a40ad32ea6b17ecc5a33fbf2fa5ff4",
+        "C54c0d751e76a3797e06e9586b59fb298",
+        "C614c73d440dcb3459b926b6c7b292529",
+        "C7b63f721abfa003f272845668ac68dd5",
+        "C7d0fe81c3cfafe692c9d6516ce6abfde",
+        "C7dee84534cd55357b19a729eeec11c11",
+        "C89416343e0371b16de8b18a5edef19c6",
+        "C8aaf9350909bb9a0731c2bf84b6217dc",
+        "C8d679743ba0ac35d9a94a30469ba9357",
+        "C905caf5a8e5cd345b6e731d69d75f40e",
+        "C95ce4b455bef784a668fb2a9b3a87a75",
+        "C9959c85d22adcb32a0169d52a29ab1ef",
+        "Ca27f912416b02e58733bb81b93f98525",
+        "Cbc2052cbae0ffa2f2bab269bfc80a9bc",
+        "Cc5df4aa1ae41cbde7731559adbf84a4f",
+        "Cca6718b1bca29a3c5b32123190c33160",
+        "Ccfc1ec8b5d1d858b73d5233600c3f596",
+        "Cef07326a43da517076ba2932a8719640",
+        "Cf56a349496d91586fe2379695e6911c7",
+        "Cf80b9e64695edbfba0f05e2b07b0bd90",
+        "Cfa6cb3197659a9a1102ae6a7c62bca73",
+        "Cfd0bc440daf3432f0737c50edb24fb63",
+        "Cfd1a480bd5cf9a179e44b8d253fa2521"
+    };
+    private static final String NATIVE_BRIDGE_PACKAGE = "com.wifitutu.link.foundation.native_.bridge.generated.";
+    /** ajnixx 包 — jni_bind/jni_tick/jni_invoke 等 native 方法 (崩溃堆栈直接来源) */
+    private static final String[] AJNIXX_BRIDGE_CLASSES = {
+        "com.nnt.ajnixx.Activity$Companion",
+        "com.nnt.ajnixx.MainThread$Companion",
+        "com.nnt.ajnixx.Callback"
+    };
+
     private Handler mainHandler;
     private boolean isPerformingForcedHide = false;
+    /** 宿主 classLoader 与 native 库目录 — 热重载时通过 savedInstanceState 传递给新一代代码 (均为框架/boot 类加载器对象, 可安全跨代) */
+    private ClassLoader hostClassLoader;
+    private String hostNativeLibDir;
 
     public MainHook() {
         super();
@@ -94,10 +138,19 @@ public class MainHook extends XposedModule {
 
         log(4, TAG, "Hooking into: " + param.getPackageName());
 
-        ClassLoader classLoader = param.getClassLoader();
-        
+        hostClassLoader = param.getClassLoader();
+        android.content.pm.ApplicationInfo info = param.getApplicationInfo();
+        hostNativeLibDir = (info != null) ? info.nativeLibraryDir : null;
+        installAllHooks(hostClassLoader, hostNativeLibDir);
+    }
+
+    /** 安装全部 hook — 首次加载与热重载后共用 */
+    private void installAllHooks(ClassLoader classLoader, String nativeLibDir) {
         try {
             log(4, TAG, "=== 开始初始化 hook ===");
+            // ★ 最先安装: Android 15+/16KB Page 设备上 5.2.29 启动即崩 (UnsatisfiedLinkError) 的兼容修复
+            hookNativeBridgeCompat(classLoader, nativeLibDir);
+            log(4, TAG, "hookNativeBridgeCompat 完成");
             hookVipStatus(classLoader);
             log(4, TAG, "hookVipStatus 完成");
             hookBottomNavigation(classLoader);
@@ -124,9 +177,59 @@ public class MainHook extends XposedModule {
             log(4, TAG, "hookWifiSilentDelete 完成");
             hookQuickSettingsBypass(classLoader);
             log(4, TAG, "hookQuickSettingsBypass 完成");
+            hookMeFragment(classLoader);
+            log(4, TAG, "hookMeFragment 完成");
             log(4, TAG, "=== hook 初始化完成 ===");
         } catch (Throwable e) {
             log(6, TAG, "Initialization error: " + e.getMessage());
+        }
+    }
+
+    /**
+     * API 102 热重载 — 旧代码即将退役 (运行在旧代码上)
+     * 返回 true 前必须停掉模块拥有的线程/回调并释放对模块对象的引用
+     */
+    @Override
+    public boolean onHotReloading(@NonNull XposedModuleInterface.HotReloadingParam param) {
+        try {
+            if (mainHandler != null) {
+                mainHandler.removeCallbacksAndMessages(null);
+            }
+            isPerformingForcedHide = false;
+            // ArrayList/String/PathClassLoader 均为 boot/framework 类加载器对象, 可安全跨代传递
+            java.util.ArrayList<Object> state = new java.util.ArrayList<>();
+            state.add(hostClassLoader);
+            state.add(hostNativeLibDir);
+            param.setSavedInstanceState(state);
+            log(4, TAG, "Hot reloading: state saved, old generation retiring");
+            return true;
+        } catch (Throwable t) {
+            log(6, TAG, "Hot reloading rejected: " + t.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * API 102 热重载完成 — 新代码已加载 (运行在新代码上)
+     * 包生命周期回调不会自动重放, 必须在此显式重装 hooks
+     */
+    @Override
+    public void onHotReloaded(@NonNull XposedModuleInterface.HotReloadedParam param) {
+        super.onHotReloaded(param); // 默认实现: 卸载上一代全部 hook handles
+        try {
+            mainHandler = new Handler(Looper.getMainLooper());
+            Object saved = param.getSavedInstanceState();
+            if (saved instanceof java.util.List<?> && ((java.util.List<?>) saved).size() >= 2) {
+                java.util.List<?> state = (java.util.List<?>) saved;
+                hostClassLoader = (ClassLoader) state.get(0);
+                hostNativeLibDir = (String) state.get(1);
+                log(4, TAG, "Hot reloaded: reinstalling hooks for " + TARGET_PACKAGE);
+                installAllHooks(hostClassLoader, hostNativeLibDir);
+            } else {
+                log(6, TAG, "Hot reloaded but no saved state; hooks not reinstalled");
+            }
+        } catch (Throwable t) {
+            log(6, TAG, "onHotReloaded error: " + t.getMessage());
         }
     }
 
@@ -827,6 +930,163 @@ public class MainHook extends XposedModule {
         }
     }
 
+    /**
+     * ★ Android 15+/16KB Page Size 启动崩溃兼容修复 (5.2.29)
+     *
+     * 崩溃链路 (崩溃报告.txt):
+     *   TuTuApp.onCreate → l0.s() → c1.loadLibrary("link-foundation") 失败被 catch(Exception) 吞掉返回 false
+     *   → l0.s() 不检查返回值继续调用 native bridge → Activity$Companion.jni_bind
+     *   → UnsatisfiedLinkError: No implementation found → FATAL EXCEPTION
+     *
+     * 根因: app 自带的 ReLinker 加载链路在 Android 17 Canary 上失败 (so 本身可直接 dlopen);
+     *       16KB 页设备上 4KB 对齐的 so 则彻底无法加载。
+     *
+     * 修复策略 (抢救优先, 短路兜底):
+     *   1. 抢救: hook app 统一加载入口 c1.loadLibrary() — 放行原逻辑, 失败时改用宿主
+     *      nativeLibraryDir 直接 System.load()。成功则 native 层完整可用 (网络加解密正常),
+     *      且不预探测 (避免启动期 load 失败留下 linker 负缓存污染环境)。
+     *   2. 兜底: 对全部 native bridge 安装条件守卫 — 仅当 sNativeBroken (抢救也失败) 时:
+     *      - native 方法: 直接返回类型默认值, 绝不执行原实现
+     *        (半加载状态下执行原实现会触发无法捕获的 native SIGSEGV)
+     *      - Java 包装方法: 放行并吞 UnsatisfiedLinkError
+     */
+    private static volatile boolean sNativeBroken = false;
+
+    private void hookNativeBridgeCompat(ClassLoader classLoader, String nativeLibDir) {
+        if (!isFeatureEnabled("fix_native_bridge_crash", false)) return;
+
+        final java.util.Set<String> logged = Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap<String, Boolean>());
+        final XposedInterface.Hooker nativeShortCircuit = new XposedInterface.Hooker() {
+            @Override
+            public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable {
+                if (!sNativeBroken) return chain.proceed(); // 库可用: 完整放行, 保证网络等 native 功能
+                logOnce(logged, chain.getExecutable());
+                return defaultValueOf((Method) chain.getExecutable());
+            }
+        };
+        final XposedInterface.Hooker javaGuard = new XposedInterface.Hooker() {
+            @Override
+            public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable {
+                try {
+                    return chain.proceed();
+                } catch (UnsatisfiedLinkError e) {
+                    logOnce(logged, chain.getExecutable());
+                    return defaultValueOf((Method) chain.getExecutable());
+                }
+            }
+        };
+
+        int hooked = 0;
+        for (String name : NATIVE_BRIDGE_CLASSES) {
+            hooked += hookAllMethodsGuarded(classLoader, NATIVE_BRIDGE_PACKAGE + name, nativeShortCircuit, javaGuard);
+        }
+        for (String name : AJNIXX_BRIDGE_CLASSES) {
+            hooked += hookAllMethodsGuarded(classLoader, name, nativeShortCircuit, javaGuard);
+        }
+
+        hookLibraryLoader(classLoader, nativeLibDir);
+        log(4, TAG, "NativeBridge compat installed, methods hooked: " + hooked);
+    }
+
+    /** 抢救加载: 先用宿主 nativeLibraryDir 的正版 so 抢先注册 (幂等), 再放行 app 原加载逻辑 */
+    private void hookLibraryLoader(ClassLoader classLoader, String nativeLibDir) {
+        if (nativeLibDir == null) return;
+        try {
+            Class<?> c1Cls = classLoader.loadClass("com.wifitutu.link.foundation.sdk.c1");
+            for (Method m : c1Cls.getDeclaredMethods()) {
+                if (!m.getName().equals("loadLibrary") || m.getParameterCount() != 1) continue;
+                if (m.getParameterTypes()[0] != String.class) continue;
+                hook(m).intercept(chain -> {
+                    String name = (String) chain.getArgs().get(0);
+                    File so = new File(nativeLibDir, "lib" + name + ".so");
+                    boolean rescued = false;
+                    if (so.exists()) {
+                        // link-foundation 的 JNI_OnLoad 可能依赖 patch 库先行注册符号, 先加载 patch
+                        if ("link-foundation".equals(name)) {
+                            File patchSo = new File(nativeLibDir, "libpatch.so");
+                            if (patchSo.exists()) {
+                                try { System.load(patchSo.getAbsolutePath()); } catch (Throwable ignored) {}
+                            }
+                        }
+                        // JNI_OnLoad 的 JNI_ERR 多为多进程并发/时序竞争, 重试通常可成
+                        for (int attempt = 0; attempt < 3 && !rescued; attempt++) {
+                            try {
+                                if (attempt > 0) Thread.sleep(250L * attempt);
+                                System.load(so.getAbsolutePath()); // 已加载则为 no-op
+                                rescued = true;
+                                log(4, TAG, "Preloaded native library: " + name
+                                        + (attempt > 0 ? " (attempt " + (attempt + 1) + ")" : ""));
+                            } catch (UnsatisfiedLinkError e) {
+                                log(6, TAG, "Preload failed (" + name + ", attempt " + (attempt + 1) + "): " + e.getMessage());
+                            } catch (InterruptedException ie) {
+                                break;
+                            }
+                        }
+                    }
+                    Object r = chain.proceed(); // 幂等放行原逻辑
+                    if (!rescued) {
+                        // 正版路径彻底加载失败 → proceed 的"成功"不可信 (半初始化 so 会 SIGSEGV),
+                        // 条件守卫转为短路模式保护后续所有 bridge 调用
+                        sNativeBroken = true;
+                        log(6, TAG, "Native layer unavailable (" + name + ") — short-circuit engaged");
+                        return Boolean.FALSE;
+                    }
+                    return Boolean.TRUE;
+                });
+                log(4, TAG, "Hooked c1.loadLibrary rescue");
+                break;
+            }
+        } catch (Throwable t) {
+            log(6, TAG, "hookLibraryLoader failed: " + t.getMessage());
+        }
+    }
+
+    private void logOnce(java.util.Set<String> logged, java.lang.reflect.Executable ex) {
+        String key = ex.getDeclaringClass().getSimpleName() + "." + ex.getName();
+        if (logged.add(key)) {
+            log(6, TAG, "Native bridge degraded (no native layer): " + key);
+        }
+    }
+
+    private int hookAllMethodsGuarded(ClassLoader classLoader, String className,
+                                      XposedInterface.Hooker nativeHooker, XposedInterface.Hooker javaHooker) {
+        int count = 0;
+        try {
+            Class<?> cls = classLoader.loadClass(className);
+            for (Method m : cls.getDeclaredMethods()) {
+                if (Modifier.isNative(m.getModifiers())) {
+                    try { m.setAccessible(true); } catch (Exception ignored) {}
+                }
+                try {
+                    hook(m).intercept(Modifier.isNative(m.getModifiers()) ? nativeHooker : javaHooker);
+                    count++;
+                } catch (Throwable t) {
+                    log(6, TAG, "Skip guard on " + className + "." + m.getName() + ": " + t.getMessage());
+                }
+            }
+        } catch (Throwable t) {
+            log(6, TAG, "Bridge class not found (version drift?): " + className);
+        }
+        return count;
+    }
+
+    /** 按方法返回类型给出安全默认值 (String 给空串, 避免 Kotlin @NotNull 调用方 NPE) */
+    private static Object defaultValueOf(Method m) {
+        Class<?> r = m.getReturnType();
+        if (!r.isPrimitive()) {
+            if (r == String.class) return "";
+            return null;
+        }
+        if (r == boolean.class) return Boolean.FALSE;
+        if (r == long.class) return Long.valueOf(0L);
+        if (r == float.class) return Float.valueOf(0.0f);
+        if (r == double.class) return Double.valueOf(0.0d);
+        if (r == short.class) return Short.valueOf((short) 0);
+        if (r == byte.class) return Byte.valueOf((byte) 0);
+        if (r == char.class) return Character.valueOf('\0');
+        return Integer.valueOf(0);
+    }
+
     private void hookAds(ClassLoader classLoader) {
         try {
             Class<?> abstractAdsClass = classLoader.loadClass("com.wifi.business.potocol.sdk.base.ad.AbstractAds");
@@ -856,51 +1116,31 @@ public class MainHook extends XposedModule {
     private void hookMeFragment(ClassLoader classLoader) {
         try {
             Class<?> meFragmentClass = classLoader.loadClass(ME_FRAGMENT_CLASS);
-            
-            try {
-                Method a2Method = meFragmentClass.getDeclaredMethod("a2");
-                a2Method.setAccessible(true);
-                hook(a2Method).intercept(new XposedInterface.Hooker() {
-                    @Override
-                    public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable {
-                        Object result = chain.proceed();
-                        try { injectCustomSettings(chain.getThisObject()); } catch (Exception ignored) {}
-                        return result;
-                    }
-                });
-            } catch (Exception ignored) {}
 
-            try {
-                Method d2Method = meFragmentClass.getDeclaredMethod("d2");
-                d2Method.setAccessible(true);
-                hook(d2Method).intercept(new XposedInterface.Hooker() {
-                    @Override
-                    public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable {
-                        if (isFeatureEnabled("unlock_vip", false)) return true;
-                        return chain.proceed();
-                    }
-                });
-            } catch (Exception ignored) {}
-
-            final XposedInterface.Hooker hideBannerHooker = new XposedInterface.Hooker() {
-                @Override
-                public Object intercept(@NonNull XposedInterface.Chain chain) throws Throwable {
-                    Object result = chain.proceed();
-                    boolean vip = isFeatureEnabled("unlock_vip", false);
-                    if (vip) {
-                        boolean clean = isFeatureEnabled("deep_clean_vip", false);
-                        hideVipBanners(chain.getThisObject(), clean);
-                    }
-                    return result;
-                }
-            };
-
+            // 5.2.29: 旧 a2/d2 方法已随混淆改名消失, 改挂生命周期方法作为注入时机:
+            // onResume() / onHiddenChanged(boolean) / y0() — 统一负责注入模块设置入口 + VIP 横幅隐藏
             for (Method m : meFragmentClass.getDeclaredMethods()) {
-                if ((m.getName().equals("onResume") || m.getName().equals("y0")) && m.getParameterCount() == 0) {
-                    hook(m).intercept(hideBannerHooker);
-                }
+                String name = m.getName();
+                boolean injectPoint = name.equals("onResume") || name.equals("onHiddenChanged") || name.equals("y0");
+                if (!injectPoint || m.getParameterCount() > 1) continue;
+                try {
+                    hook(m).intercept(chain -> {
+                        Object result = chain.proceed();
+                        try {
+                            Object frag = chain.getThisObject();
+                            if (isFeatureEnabled("unlock_vip", false)) {
+                                hideVipBanners(frag, isFeatureEnabled("deep_clean_vip", false));
+                            }
+                            injectCustomSettings(frag);
+                        } catch (Exception ignored) {}
+                        return result;
+                    });
+                } catch (Throwable ignored) {}
             }
-        } catch (Exception ignored) {}
+            log(4, TAG, "Hooked MeFragment lifecycle (settings entry + vip banners)");
+        } catch (Throwable e) {
+            log(6, TAG, "Failed to hook MeFragment: " + e.getMessage());
+        }
     }
 
     private void hideVipBanners(Object meFragment, boolean deepClean) {

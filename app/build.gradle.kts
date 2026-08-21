@@ -2,7 +2,7 @@ import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
-    id("org.jetbrains.kotlin.plugin.compose") version "2.0.0"
+    alias(libs.plugins.compose.compiler)
 }
 
 val keystorePropertiesFile = rootProject.file("app/keystore.properties")
@@ -13,14 +13,16 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "com.ty.wifikeyxposed"
-    compileSdk = 36
+    // libxposed service/interface 102 元数据要求 compileSdk 37 (预览版, 无公开 platform 包);
+    // 本地用 android-36 内容克隆的 android-37 stub 满足检查, 本模块未使用 API 37 新符号
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.ty.wifikeyxposed"
         minSdk = 30
         targetSdk = 36
-        versionCode = 10
-        versionName = "1.5.8"
+        versionCode = 11
+        versionName = "1.6.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -61,9 +63,18 @@ android {
     }
 }
 
+// AGP 9.3.1 内部引用了未发布的 org.jetbrains.kotlin:compose-group-mapping:2.2.10, 替换为实际存在的版本
+configurations.all {
+    resolutionStrategy.dependencySubstitution {
+        substitute(module("org.jetbrains.kotlin:compose-group-mapping"))
+            .using(module("org.jetbrains.kotlin:compose-group-mapping:2.3.21"))
+            .because("2.2.10 was never published to any repository")
+    }
+}
+
 dependencies {
-    compileOnly("io.github.libxposed:api:101.0.1")
-    implementation("io.github.libxposed:service:101.0.0")
+    compileOnly("io.github.libxposed:api:102.0.0")
+    implementation("io.github.libxposed:service:102.0.0")
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.core.ktx)
     implementation(libs.material)

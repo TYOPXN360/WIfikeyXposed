@@ -25,6 +25,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -35,32 +36,35 @@ import com.google.android.material.color.DynamicColors
 import io.github.libxposed.service.XposedService
 import io.github.libxposed.service.XposedServiceHelper
 
-class SettingsActivity : ComponentActivity(), XposedServiceHelper.OnServiceListener {
+class SettingsActivity : ComponentActivity(), ModuleApp.ServiceStateListener {
     private var remotePrefs by mutableStateOf<SharedPreferences?>(null)
     private var isServiceBound by mutableStateOf(false)
+    /** true = 服务超时未绑定, 已降级为本地偏好 (离线模式) */
+    private var offlineFallback by mutableStateOf(false)
 
-    companion object {
-        @Volatile
-        private var cachedService: XposedService? = null
+    private val timeoutRunnable = Runnable {
+        if (!isServiceBound && !offlineFallback) {
+            offlineFallback = true
+            remotePrefs = getSharedPreferences("settings", MODE_PRIVATE)
+            isServiceBound = true
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         DynamicColors.applyToActivityIfAvailable(this)
         enableEdgeToEdge()
-        
-        try {
-            XposedServiceHelper.registerListener(this)
-            cachedService?.let { onServiceBind(it) }
-        } catch (e: Exception) {
-            isServiceBound = true
-            remotePrefs = getSharedPreferences("settings", MODE_PRIVATE)
-        }
+
+        // 官方模式: Application 全局唯一注册, Activity 只做观察者并立即获取当前状态
+        ModuleApp.addServiceStateListener(this, notifyImmediately = true)
+
+        // 兜底: LSPosed binder 推送延迟/缺失时, 3 秒后降级本地偏好, 不再卡在连接页
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(timeoutRunnable, 3000)
 
         setContent {
             AppTheme {
                 if (isServiceBound && remotePrefs != null) {
-                    SettingsScreen(remotePrefs!!) { finish() }
+                    SettingsScreen(remotePrefs!!, offlineFallback) { finish() }
                 } else {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -74,15 +78,45 @@ class SettingsActivity : ComponentActivity(), XposedServiceHelper.OnServiceListe
         }
     }
 
-    override fun onServiceBind(service: XposedService) {
-        cachedService = service
-        remotePrefs = service.getRemotePreferences("settings")
-        isServiceBound = true
+    override fun onStart() {
+        super.onStart()
+        ModuleApp.addServiceStateListener(this, notifyImmediately = true)
     }
 
-    override fun onServiceDied(service: XposedService) {
-        isServiceBound = false
-        remotePrefs = null
+    override fun onStop() {
+        ModuleApp.removeServiceStateListener(this)
+        super.onStop()
+    }
+
+    override fun onDestroy() {
+        android.os.Handler(android.os.Looper.getMainLooper()).removeCallbacks(timeoutRunnable)
+        ModuleApp.removeServiceStateListener(this)
+        super.onDestroy()
+    }
+
+    override fun onServiceStateChanged(service: XposedService?) {
+        if (service != null) {
+            offlineFallback = false
+            remotePrefs = service.getRemotePreferences("settings")
+            isServiceBound = true
+        } else if (!offlineFallback) {
+            isServiceBound = false
+            remotePrefs = null
+        }
+    }
+}
+
+@Composable
+fun LegacyRestartButton(onRestart: () -> Unit) {
+    Button(
+        onClick = onRestart,
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.extraLarge,
+        contentPadding = PaddingValues(16.dp)
+    ) {
+        Icon(Icons.Default.Bolt, contentDescription = null)
+        Spacer(modifier = Modifier.width(8.dp))
+        Text("重启应用", fontWeight = FontWeight.Bold)
     }
 }
 
@@ -146,9 +180,9 @@ fun ExpandableSection(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
+fun SettingsScreen(prefs: SharedPreferences, offlineMode: Boolean, onBack: () -> Unit) {
     val context = LocalContext.current
-    
+
     var tick by remember { mutableIntStateOf(0) }
     DisposableEffect(prefs) {
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
@@ -158,62 +192,64 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
         onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
 
-    var blockNews by remember(tick) { mutableStateOf(prefs.getBoolean("block_news", false)) }
-    var unlockVip by remember(tick) { mutableStateOf(prefs.getBoolean("unlock_vip", false)) }
-    var deepCleanVip by remember(tick) { mutableStateOf(prefs.getBoolean("deep_clean_vip", false)) }
-    var removeAds by remember(tick) { mutableStateOf(prefs.getBoolean("remove_ads", false)) }
-    var blockCoinTaskBall by remember(tick) { mutableStateOf(prefs.getBoolean("block_coin_task_ball", false)) }
-    var liteTeenager by remember(tick) { mutableStateOf(prefs.getBoolean("lite_teenager", false)) }
-    var removeCloudControl by remember(tick) { mutableStateOf(prefs.getBoolean("remove_cloud_control", false)) }
+    var blockNews by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("block_news", false)) }
+    var unlockVip by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("unlock_vip", false)) }
+    var deepCleanVip by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("deep_clean_vip", false)) }
+    var removeAds by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("remove_ads", false)) }
+    var blockCoinTaskBall by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("block_coin_task_ball", false)) }
+    var liteTeenager by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("lite_teenager", false)) }
+    var removeCloudControl by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("remove_cloud_control", false)) }
 
-    var hideToolClean by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_clean", false)) }
-    var hideToolSpeedup by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_speedup", false)) }
-    var hideToolCooling by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_cooling", false)) }
-    var hideToolSpeedtest by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_speedtest", false)) }
-    var hideToolNetwork by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_network", false)) }
-    var hideToolSecurity by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_security", false)) }
-    var hideToolKuaikan by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_kuaikan", false)) }
-    var hideToolNovel by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_novel", false)) }
-    var hideToolGame by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_game", false)) }
-    var hideToolMore by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_more", false)) }
-    var hideToolPieces by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_pieces", false)) }
-    var hideToolDouyinCoupon by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_douyin_coupon", false)) }
-    var hideToolFriendMsg by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_friend_msg", false)) }
-    var hideToolVip by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_vip", false)) }
-    var hideToolUser by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_user", false)) }
-    var hideToolIm by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_im", false)) }
-    var hideToolEmpower by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_empower", false)) }
-    var hideToolDynamicCard by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_dynamic_card", false)) }
-    var hideToolTarget30 by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_target30", false)) }
-    var hideToolArea by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tool_area", false)) }
+    var hideToolClean by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("hide_tool_clean", false)) }
+    var hideToolSpeedup by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("hide_tool_speedup", false)) }
+    var hideToolCooling by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("hide_tool_cooling", false)) }
+    var hideToolSpeedtest by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("hide_tool_speedtest", false)) }
+    var hideToolNetwork by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("hide_tool_network", false)) }
+    var hideToolSecurity by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("hide_tool_security", false)) }
+    var hideToolKuaikan by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("hide_tool_kuaikan", false)) }
+    var hideToolNovel by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("hide_tool_novel", false)) }
+    var hideToolGame by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("hide_tool_game", false)) }
+    var hideToolMore by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("hide_tool_more", false)) }
+    var hideToolPieces by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("hide_tool_pieces", false)) }
+    var hideToolDouyinCoupon by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("hide_tool_douyin_coupon", false)) }
+    var hideToolFriendMsg by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("hide_tool_friend_msg", false)) }
+    var hideToolVip by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("hide_tool_vip", false)) }
+    var hideToolUser by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("hide_tool_user", false)) }
+    var hideToolIm by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("hide_tool_im", false)) }
+    var hideToolEmpower by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("hide_tool_empower", false)) }
+    var hideToolDynamicCard by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("hide_tool_dynamic_card", false)) }
+    var hideToolTarget30 by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("hide_tool_target30", false)) }
+    var hideToolArea by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("hide_tool_area", false)) }
 
-    var blockWifiClearConfig by remember(tick) { mutableStateOf(prefs.getBoolean("block_wifi_clear_config", false)) }
-    var blockWifiDeleteModel by remember(tick) { mutableStateOf(prefs.getBoolean("block_wifi_delete_model", false)) }
-    var blockWifiPostClean by remember(tick) { mutableStateOf(prefs.getBoolean("block_wifi_post_clean", false)) }
-    var bypassQsGuide by remember(tick) { mutableStateOf(prefs.getBoolean("bypass_qs_guide", false)) }
-    var bypassOverlayGuide by remember(tick) { mutableStateOf(prefs.getBoolean("bypass_overlay_guide", false)) }
-    var bypassAntiTamper by remember(tick) { mutableStateOf(prefs.getBoolean("bypass_anti_tamper", false)) }
-    var hideSpeedUp by remember(tick) { mutableStateOf(prefs.getBoolean("hide_speed_up", false)) }
+    var blockWifiClearConfig by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("block_wifi_clear_config", false)) }
+    var blockWifiDeleteModel by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("block_wifi_delete_model", false)) }
+    var blockWifiPostClean by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("block_wifi_post_clean", false)) }
+    var bypassQsGuide by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("bypass_qs_guide", false)) }
+    var bypassOverlayGuide by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("bypass_overlay_guide", false)) }
+    var bypassAntiTamper by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("bypass_anti_tamper", false)) }
+    var hideSpeedUp by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("hide_speed_up", false)) }
+    // 兼容性修复: 默认关闭, Android 17 (16KB 内存页) 专用, 仅当目标应用无法打开时才需开启
+    var fixNativeBridge by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("fix_native_bridge_crash", false)) }
 
     var expandFeature by remember { mutableStateOf(true) }
     var expandBottomBar by remember { mutableStateOf(true) }
     var expandHomeTools by remember { mutableStateOf(true) }
     var expandWifiProtect by remember { mutableStateOf(true) }
 
-    var hideHome by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_home", false)) }
-    var hideNearby by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_nearby", false)) }
-    var hideVideo by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_video", false)) }
-    var hideWelfare by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_welfare", false)) }
-    var hideIm by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_im", false)) }
-    var hideWeb by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_web", false)) }
-    var hideGuard by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_guard", false)) }
-    var hideMe by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_me", false)) }
-    var hideDeepseek by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_deepseek", false)) }
-    var hideShopmall by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_shopmall", false)) }
-    var hideBus by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_bus", false)) }
-    var hideFilm by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_film", false)) }
-    var hideAi by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_ai", false)) }
-    var hideKouxin by remember(tick) { mutableStateOf(prefs.getBoolean("hide_tab_kouxin", false)) }
+    var hideHome by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("hide_tab_home", false)) }
+    var hideNearby by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("hide_tab_nearby", false)) }
+    var hideVideo by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("hide_tab_video", false)) }
+    var hideWelfare by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("hide_tab_welfare", false)) }
+    var hideIm by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("hide_tab_im", false)) }
+    var hideWeb by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("hide_tab_web", false)) }
+    var hideGuard by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("hide_tab_guard", false)) }
+    var hideMe by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("hide_tab_me", false)) }
+    var hideDeepseek by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("hide_tab_deepseek", false)) }
+    var hideShopmall by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("hide_tab_shopmall", false)) }
+    var hideBus by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("hide_tab_bus", false)) }
+    var hideFilm by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("hide_tab_film", false)) }
+    var hideAi by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("hide_tab_ai", false)) }
+    var hideKouxin by remember(prefs, tick) { mutableStateOf(prefs.getBoolean("hide_tab_kouxin", false)) }
 
     var showHomeWarning by remember { mutableStateOf(false) }
     var showMeWarning by remember { mutableStateOf(false) }
@@ -226,10 +262,15 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
             hideToolPieces && hideToolDouyinCoupon && hideToolFriendMsg &&
             hideToolVip && hideToolUser && hideToolIm && hideToolEmpower && hideToolDynamicCard && hideToolTarget30 && hideToolArea && hideSpeedUp
 
+    // 大标题随内容滚动折叠成小标题栏 (与"全选/取消全选"同一行高度)
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             LargeTopAppBar(
                 title = { Text("Wifi万能钥匙增强", fontWeight = FontWeight.Bold) },
+                scrollBehavior = scrollBehavior,
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -340,6 +381,22 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
+            if (offlineMode) {
+                Surface(
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    shape = MaterialTheme.shapes.medium,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        "⚠ 离线模式：未能连接 LSPosed 服务，当前显示本地配置。部分设置可能不生效，可稍后重试。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
             // ─── 功能增强 ───
             ExpandableSection(
                 expanded = expandFeature,
@@ -416,9 +473,9 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                                 prefs.edit().putBoolean("remove_cloud_control", it).apply()
                             }
                         )
-                        
+
                         if (removeCloudControl) {
-                            Box(modifier = Modifier.padding(start = 56.dp, bottom = 12.dp, end = 16.dp)) {
+                            Box(modifier = Modifier.padding(start = 56.dp, top = 4.dp, bottom = 12.dp, end = 16.dp)) {
                                 OutlinedButton(
                                     onClick = {
                                         val packageName = "com.snda.wifilocating"
@@ -438,6 +495,17 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
                                 }
                             }
                         }
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingItem(
+                            title = "修复启动崩溃 (Android 17 专用)",
+                            subtitle = "16KB 内存页设备上应用打不开(启动闪退)时才需要开启；开启后以无 native 层模式运行，部分联网/安全功能受限",
+                            icon = Icons.Default.Build,
+                            checked = fixNativeBridge,
+                            onCheckedChange = {
+                                fixNativeBridge = it
+                                prefs.edit().putBoolean("fix_native_bridge_crash", it).apply()
+                            }
+                        )
                     }
                 }
             }
@@ -834,47 +902,143 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            Button(
-                onClick = {
-                    val packageName = "com.snda.wifilocating"
-                    val mainActivity = "com.wifitutu.ui.launcher.LauncherActivity"
-                    val restartAction = "com.ty.wifikeyxposed.ACTION_RESTART"
-                    
-                    val intent = Intent(restartAction).apply {
-                        setPackage(packageName)
-                    }
-                    context.sendBroadcast(intent)
-                    
-                    Toast.makeText(context, "重启中...", Toast.LENGTH_SHORT).show()
-                    
-                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                        try {
-                            val launchIntent = Intent().apply {
-                                component = ComponentName(packageName, mainActivity)
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+            // ─── 应用生效方式: API 102 热重载优先, 传统重启兜底 ───
+            val xposedService = ModuleApp.service
+            val hotReloadAvailable = xposedService != null && xposedService.apiVersion >= 102
+            var reloadStatus by remember { mutableStateOf("") }
+
+            if (hotReloadAvailable) {
+                Button(
+                    onClick = {
+                        val svc = ModuleApp.service ?: return@Button
+                        // 拉起目标应用: 已运行则切前台 (singleTask 回到现有实例), 未运行则冷启动
+                        val relaunchTarget: () -> Unit = {
+                            try {
+                                val launchIntent = Intent().apply {
+                                    component = ComponentName(
+                                        "com.snda.wifilocating",
+                                        "com.wifitutu.ui.launcher.LauncherActivity"
+                                    )
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+                                }
+                                context.startActivity(launchIntent)
+                            } catch (e: Exception) {
+                                context.packageManager.getLaunchIntentForPackage("com.snda.wifilocating")
+                                    ?.let { context.startActivity(it) }
                             }
-                            context.startActivity(launchIntent)
-                        } catch (e: Exception) {
-                            val fallback = context.packageManager.getLaunchIntentForPackage(packageName)
-                            fallback?.let { context.startActivity(it) }
                         }
-                    }, 1500)
-                },
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.extraLarge,
-                contentPadding = PaddingValues(16.dp)
-            ) {
-                Icon(Icons.Default.Bolt, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("重启应用", fontWeight = FontWeight.Bold)
+                        val targets = svc.runningTargets
+                        if (targets.isEmpty()) {
+                            Toast.makeText(context, "目标应用未运行，正在为你启动...", Toast.LENGTH_SHORT).show()
+                            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(relaunchTarget, 600)
+                            return@Button
+                        }
+                        reloadStatus = "重载中 (${targets.size} 个进程)..."
+                        var done = 0
+                        for (target in targets) {
+                            svc.hotReloadModule(target, null) { p, r ->
+                                done++
+                                val line = when (r.status) {
+                                    io.github.libxposed.service.HotReloadResult.Status.SUCCEEDED -> "✓ ${p.processName}"
+                                    else -> "✗ ${p.processName}: ${r.status}" + (r.message?.let { " ($it)" } ?: "")
+                                }
+                                // 回调来自 binder 线程, 必须切主线程更新 Compose 状态 (官方 example 同款做法)
+                                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                    reloadStatus = "$line\n${reloadStatus.lines().drop(1).joinToString("\n")}"
+                                    if (done == targets.size) {
+                                        Toast.makeText(context, "热重载完成，正在拉起目标应用...", Toast.LENGTH_SHORT).show()
+                                        // 重载完成后 1 秒把目标应用拉到前台, 确保新 hook 生效的界面立即可见
+                                        android.os.Handler(android.os.Looper.getMainLooper())
+                                            .postDelayed(relaunchTarget, 1000)
+                                    }
+                                }
+                            }
+                        }
+                        // 兜底: 部分框架版本不回调整, 超时后给出提示并拉起目标应用
+                        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                            if (reloadStatus.startsWith("重载中")) {
+                                reloadStatus = "⚠ 框架未返回结果 — 当前 LSPosed 版本可能不支持 service 热重载，已拉起目标应用"
+                                relaunchTarget()
+                            }
+                        }, 15000)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.extraLarge,
+                    contentPadding = PaddingValues(16.dp)
+                ) {
+                    Icon(Icons.Default.Bolt, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("热重载模块 (免重启)", fontWeight = FontWeight.Bold)
+                }
+                if (reloadStatus.isNotEmpty()) {
+                    Text(
+                        reloadStatus,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.padding(top = 8.dp, start = 16.dp)
+                    )
+                }
+                Text(
+                    "提示：将新模块代码直接换入运行中的目标进程，无需重启应用 (需 LSPosed 支持 API 102)",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.padding(top = 8.dp, start = 16.dp)
+                )
+                var showLegacyRestart by remember { mutableStateOf(false) }
+                TextButton(
+                    onClick = { showLegacyRestart = !showLegacyRestart },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(if (showLegacyRestart) "收起传统重启" else "传统重启 (备选)", fontSize = 13.sp)
+                }
+                if (showLegacyRestart) {
+                    LegacyRestartButton(
+                        onRestart = {
+                            val packageName = "com.snda.wifilocating"
+                            val intent = Intent("com.ty.wifikeyxposed.ACTION_RESTART").apply { setPackage(packageName) }
+                            context.sendBroadcast(intent)
+                            Toast.makeText(context, "重启中...", Toast.LENGTH_SHORT).show()
+                            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                                try {
+                                    val launchIntent = Intent().apply {
+                                        component = ComponentName(packageName, "com.wifitutu.ui.launcher.LauncherActivity")
+                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+                                    }
+                                    context.startActivity(launchIntent)
+                                } catch (e: Exception) {
+                                    context.packageManager.getLaunchIntentForPackage(packageName)?.let { context.startActivity(it) }
+                                }
+                            }, 1500)
+                        }
+                    )
+                }
+            } else {
+                LegacyRestartButton(
+                    onRestart = {
+                        val packageName = "com.snda.wifilocating"
+                        val intent = Intent("com.ty.wifikeyxposed.ACTION_RESTART").apply { setPackage(packageName) }
+                        context.sendBroadcast(intent)
+                        Toast.makeText(context, "重启中...", Toast.LENGTH_SHORT).show()
+                        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                            try {
+                                val launchIntent = Intent().apply {
+                                    component = ComponentName(packageName, "com.wifitutu.ui.launcher.LauncherActivity")
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+                                }
+                                context.startActivity(launchIntent)
+                            } catch (e: Exception) {
+                                context.packageManager.getLaunchIntentForPackage(packageName)?.let { context.startActivity(it) }
+                            }
+                        }, 1500)
+                    }
+                )
+                Text(
+                    "提示：利用显式 Intent 直连主入口，实现最高拉起成功率",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.padding(top = 8.dp, start = 16.dp)
+                )
             }
-            
-            Text(
-                "提示：利用显式 Intent 直连主入口，实现最高拉起成功率",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.secondary,
-                modifier = Modifier.padding(top = 8.dp, start = 16.dp)
-            )
         }
     }
 
