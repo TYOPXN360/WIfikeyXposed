@@ -1,8 +1,8 @@
 # WiFi万能钥匙 Xposed 模块
 
-WiFi万能钥匙 5.2.19 的 Xposed 模块，提供本地 SVIP 永久解锁、全模块去广告、底栏/工具栏精简、WiFi 防护等功能。
+WiFi万能钥匙 5.2.29 的 Xposed 模块，提供本地 SVIP 永久解锁、全模块去广告、底栏/工具栏精简、WiFi 防护等功能。
 
-[![Latest Release](https://img.shields.io/badge/最新版本-v1.5.8-blue)](https://github.com/TYOPXN360/WIfikeyXposed/releases/latest)
+[![Latest Release](https://img.shields.io/badge/最新版本-v1.6.0-blue)](https://github.com/TYOPXN360/WIfikeyXposed/releases/latest)
 [![Downloads](https://img.shields.io/badge/平台-Android_11%2B-green)](https://github.com/TYOPXN360/WIfikeyXposed/releases)
 
 ## ⚠️ 代码生成说明
@@ -56,7 +56,7 @@ WiFi万能钥匙 5.2.19 的 Xposed 模块，提供本地 SVIP 永久解锁、全
 
 ## 技术信息
 
-- **目标应用**：WiFi万能钥匙 5.2.19 (com.snda.wifilocating)
+- **目标应用**：WiFi万能钥匙 5.2.29 (com.snda.wifilocating)
 - **最低系统**：Android 11 (API 30)
 - **Xposed API**：libxposed API 101
 - **开发框架**：Android Gradle + Kotlin + Jetpack Compose
@@ -95,6 +95,15 @@ WIfikeyXposed/
 - WiFi 防护功能为实验性功能，可能不完全生效
 
 ## 更新日志
+
+### v1.6.0
+- libxposed API 升级至 102：支持热重载，设置页新增「热重载模块 (免重启)」按钮
+- 新增 Android 17 Canary 启动崩溃防护（抢救加载 + native bridge 短路兜底，默认关闭）
+- 修复偶发卡死在「正在连接 LSPosed 服务」：服务监听重构为官方架构 + 3 秒超时降级离线模式
+- 修复服务恢复后开关不刷新的问题
+- 修复「我的」页面模块入口消失（适配 5.2.29 混淆变更）
+- 「清除云控配置」按钮移至「去除云控系统」正下方；大标题随滚动折叠
+- 构建链升级：AGP 9.3.1 / Kotlin 2.3.21 / Gradle 9.5.0
 
 ### v1.5.8
 - 重做设置界面展开/折叠过渡动画（ExpandableSection + AnimatedVisibility + 箭头旋转动画）
